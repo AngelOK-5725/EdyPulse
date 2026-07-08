@@ -6,9 +6,6 @@ name = "edupulse"
 # Build configuration
 pages_build_output_dir = "./frontend/dist"
 
-[build]
-command = "cd functions && npm install && cd ../frontend && npm install && npm run build"
-
 # Environment variables (set these in Cloudflare Pages dashboard or via wrangler)
 # [vars]
 # DEBUG = "true"
