@@ -1,0 +1,12 @@
+[project]
+name = "edupulse"
+version = "1.0.0"
+description = "EduPulse Telegram Mini App Backend"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["backend", "google", "shared"]
