@@ -287,4 +287,4 @@ export function requireOwner(user: AuthUser | null): user is AuthUser {
   return true;
 }
 
-export { getOwnerTelegramId, getBotToken };
+export { getOwnerTelegramId, getBotToken, UserRole };
