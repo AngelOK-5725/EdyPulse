@@ -4,6 +4,11 @@ version = "1.0.0"
 description = "EduPulse Telegram Mini App Backend"
 requires-python = ">=3.12"
 
+[tool.setuptools.packages.find]
+include = ["backend*", "shared*", "sheets*"]
+
+exclude = ["frontend*", "docker*"]
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["."]
