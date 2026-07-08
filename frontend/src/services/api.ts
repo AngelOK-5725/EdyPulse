@@ -4,7 +4,9 @@
  * При переходе на PostgreSQL достаточно обновить только backend — фронт не меняется.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// In production (Cloudflare Pages), API is served on the same domain under /api
+// In development, use VITE_API_URL env or default to localhost:8000
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 let authToken = '';
 

@@ -1,0 +1,9 @@
+{
+  "name": "edupulse-functions",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "hono": "^4.12.28"
+  }
+}

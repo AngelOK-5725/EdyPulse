@@ -1,0 +1,21 @@
+# Cloudflare Pages configuration for EduPulse
+# https://developers.cloudflare.com/pages/
+
+name = "edupulse"
+
+# Build configuration
+pages_build_output_dir = "./frontend/dist"
+
+# Environment variables (set these in Cloudflare Pages dashboard or via wrangler)
+# [vars]
+# DEBUG = "true"
+# TELEGRAM_BOT_TOKEN = ""
+# JWT_SECRET = "edupulse-jwt-secret-change-in-production"
+# GOOGLE_SHEETS_PRIVATE_KEY = ""
+# GOOGLE_SHEETS_CLIENT_EMAIL = ""
+# GOOGLE_SHEETS_SPREADSHEET_ID = ""
+# OWNER_TELEGRAM_ID = "0"
+
+# Compatibility flags for newer Workers APIs
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2025-04-01"

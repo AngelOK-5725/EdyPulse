@@ -17,4 +17,6 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  // Cloudflare Pages expects all routes to serve index.html for SPA routing
+  appType: 'spa',
 });
