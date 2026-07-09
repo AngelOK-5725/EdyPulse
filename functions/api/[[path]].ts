@@ -10,9 +10,9 @@ import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { handle } from 'hono/cloudflare-pages';
 
-import { AuthUser, UserRole, extractUserFromInitData, createAccessToken, getAuthUserFromRequest, requireAdmin, requireOwner } from './_utils/auth';
-import { seedDemoData } from './_utils/seed';
-import * as s from './_utils/services';
+import { AuthUser, UserRole, extractUserFromInitData, createAccessToken, getAuthUserFromRequest, requireAdmin, requireOwner } from '../_utils/auth';
+import { seedDemoData } from '../_utils/seed';
+import * as s from '../_utils/services';
 
 // ─── App Setup ─────────────────────────────────────────────────────────────
 
