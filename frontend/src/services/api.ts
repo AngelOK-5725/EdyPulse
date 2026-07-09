@@ -1,11 +1,11 @@
 /**
  * API Service — единственная точка доступа к backend.
- * Все запросы к Google Sheets проходят через этот слой.
+ * Все запросы направляются на Render FastAPI backend.
  * При переходе на PostgreSQL достаточно обновить только backend — фронт не меняется.
  */
 
-// In production (Cloudflare Pages), API is served on the same domain under /api
-// In development, use VITE_API_URL env or default to localhost:8000
+// Production: VITE_API_URL is set via .env.production (Render backend)
+// Development: falls back to '/api' (local backend or Cloudflare Functions)
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 let authToken = '';

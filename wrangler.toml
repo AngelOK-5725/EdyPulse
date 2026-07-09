@@ -6,15 +6,12 @@ name = "edupulse"
 # Build configuration
 pages_build_output_dir = "./frontend/dist"
 
-# Environment variables (set these in Cloudflare Pages dashboard or via wrangler)
-# [vars]
-# DEBUG = "true"
-# TELEGRAM_BOT_TOKEN = ""
-# JWT_SECRET = "edupulse-jwt-secret-change-in-production"
-# GOOGLE_SHEETS_PRIVATE_KEY = ""
-# GOOGLE_SHEETS_CLIENT_EMAIL = ""
-# GOOGLE_SHEETS_SPREADSHEET_ID = ""
-# OWNER_TELEGRAM_ID = "0"
+# Environment variables for Cloudflare Pages Functions (runtime only)
+# NOTE: Vite build-time variables cannot be set here.
+# VITE_API_URL is set via frontend/.env.production instead.
+# https://vite.dev/guide/env-and-mode#env-files
+[vars]
+VITE_API_URL = "https://edypulse.onrender.com/api"
 
 # Compatibility flags for newer Workers APIs
 compatibility_flags = ["nodejs_compat"]

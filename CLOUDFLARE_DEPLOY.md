@@ -1,5 +1,21 @@
 # 🚀 Deploy EduPulse to Cloudflare Pages
 
+## 📋 Architecture (Updated)
+
+```
+┌─────────────────────┐         ┌──────────────────────┐
+│  Cloudflare Pages   │         │  Render (FastAPI)    │
+│  (Static Frontend)  │ ──────▶ │  (Backend API)       │
+│  edypulse.pages.dev │  HTTPS  │  edypulse.onrender   │
+│                     │         │  .com/api/*          │
+└─────────────────────┘         └──────────────────────┘
+```
+
+- **Cloudflare Pages** serves only the static React SPA (`frontend/dist`)
+- **Render** runs the FastAPI backend with all API routes (`/api/*`)
+- Frontend points to `https://edypulse.onrender.com/api` via `VITE_API_URL`
+- Cloudflare Pages Functions are **no longer used** for API requests
+
 ## Предварительные требования
 
 1. **Аккаунт Cloudflare** — [dash.cloudflare.com](https://dash.cloudflare.com)
@@ -8,20 +24,37 @@
 
 ## Настройка переменных окружения
 
-Перед деплоем добавьте в **Cloudflare Pages → ваш проект → Settings → Environment variables**:
+### Build-time (Vite)
+
+`VITE_API_URL` задаётся в файле `frontend/.env.production`:
+```
+VITE_API_URL=https://edypulse.onrender.com/api
+```
+
+Vite автоматически подхватывает этот файл при сборке (`npm run build`).
+Не требует настройки в Cloudflare Dashboard.
+
+### Runtime (Cloudflare Pages Functions — больше не используются)
+
+Переменные для Cloudflare Functions **больше не нужны**, так как API работает на Render.
+Если потребуется вернуть Functions — добавьте в Cloudflare Dashboard:
+
+| Переменная | Описание |
+|-----------|----------|
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram бота (из @BotFather) |
+| `JWT_SECRET` | Секрет для JWT |
+| `OWNER_TELEGRAM_ID` | Ваш Telegram ID |
+| `DEBUG` | `true` — режим демо без авторизации |
+
+### Backend (Render)
+
+Настройте следующие переменные в **Render Dashboard → Environment**:
 
 | Переменная | Обязательная | Описание |
 |-----------|-------------|----------|
-| `TELEGRAM_BOT_TOKEN` | Да | Токен Telegram бота (из @BotFather) |
-| `JWT_SECRET` | Нет | Секрет для JWT (если не задан — используется default) |
-| `OWNER_TELEGRAM_ID` | Да | Ваш Telegram ID для доступа к панели Owner |
-| `DEBUG` | Нет | `true` — режим демо без авторизации (только для теста) |
-
-### Google Sheets (опционально)
-
-Для работы с Google Sheets потребуется **RS256 JWT подпись**, которая пока не реализована для Workers runtime.
-**Рекомендация:** Пока используйте демо-режим (`DEBUG=true`) — данные сбрасываются при перезапуске, но всё работает.
-Для production рассмотрите Cloudflare D1 (SQLite) как хранилище.
+| `TELEGRAM_BOT_TOKEN` | Да | Токен Telegram бота |
+| `JWT_SECRET` | Нет | Секрет для JWT |
+| `OWNER_TELEGRAM_ID` | Да | Ваш Telegram ID |
 
 ## Деплой через Cloudflare Dashboard
 
@@ -38,31 +71,23 @@
 | **Build output directory** | `frontend/dist` |
 | **Root directory** | (оставьте пустым — корень репозитория) |
 
-5. В разделе **Environment variables (advanced)** добавьте переменные из таблицы выше
+5. В разделе **Environment variables (advanced)** можно оставить пустым — `VITE_API_URL` уже задан в `.env.production`
 6. Нажмите **Save and Deploy**
 
-Cloudflare Pages автоматически:
-- Установит зависимости Functions (`hono`)
-- Соберёт React фронтенд
-- Обнаружит `functions/` директорию
-- Запустит Pages Functions как API-бэкенд
+> **Важно:** Build command включает установку зависимостей Functions для обратной совместимости.
+> Если вы удалили `functions/` — уберите часть `&& cd ../functions && npm install`.
 
 ## Деплой через Wrangler CLI
 
 ```bash
-# 1. Установите зависимости для Functions
-cd functions && npm install && cd ..
+# 1. Сборка фронтенда
+cd frontend && npm install && npm run build
 
-# 2. Авторизация Wrangler
-wrangler login
-
-# 3. Деплой
+# 2. Деплой статики
 wrangler pages deploy frontend/dist --branch production
 ```
 
 ## Локальная разработка
-
-### Frontend (отдельно)
 
 ```bash
 cd frontend
@@ -70,56 +95,63 @@ npm run dev
 # → http://localhost:5173
 ```
 
-### Frontend + Functions (через Wrangler)
+В режиме разработки фронтенд использует запасной URL `/api` (локальный бэкенд или Cloudflare Functions).
+Чтобы направить запросы на Render в dev-режиме:
 
 ```bash
-# Установите Wrangler глобально
-npm install -g wrangler
+# Windows (CMD)
+set VITE_API_URL=https://edypulse.onrender.com/api && npm run dev
 
-# Запустите локальный сервер Pages
-wrangler pages dev frontend/dist -- npm run dev --prefix frontend
+# Windows (PowerShell)
+$env:VITE_API_URL="https://edypulse.onrender.com/api"; npm run dev
+
+# macOS/Linux
+VITE_API_URL=https://edypulse.onrender.com/api npm run dev
 ```
 
-Или используйте параллельно:
-```bash
-# Терминал 1: Python бэкенд (для разработки)
-cd backend && uvicorn app.main:app --reload
-
-# Терминал 2: Frontend
-cd frontend && npm run dev -- --host
-```
-
-## Структура Cloudflare Pages
+## Структура проекта (после изменений)
 
 ```
 edupulse/
-├── frontend/              ← React SPA (собирается в frontend/dist)
-│   └── dist/              ← Build output (указан в Pages)
-├── functions/             ← Cloudflare Pages Functions (API)
-│   ├── _utils/
-│   │   ├── auth.ts        ← JWT + Telegram initData (Web Crypto API)
-│   │   ├── services.ts    ← Вся бизнес-логика
-│   │   ├── store.ts       ← In-memory data store
-│   │   ├── seed.ts        ← Демо-данные
-│   │   ├── types.ts       ← TypeScript типы
-│   │   └── sheets.ts      ← Google Sheets заглушка
-│   ├── [[path]].ts        ← Hono роутер (все /api/* запросы)
-│   └── package.json       ← Зависимости (hono)
-├── wrangler.toml          ← Cloudflare конфигурация
-└── CLOUDFLARE_DEPLOY.md   ← Этот файл
+├── frontend/                   ← React SPA
+│   ├── .env.production         ← VITE_API_URL для продакшена
+│   ├── src/services/api.ts     ← API клиент (указывает на Render)
+│   └── dist/                   ← Build output
+├── functions/                  ← Cloudflare Functions (DEPRECATED)
+│   ├── api/[[path]].ts         ← Заглушка (больше не обрабатывает запросы)
+│   └── _utils/                 ← Утилиты (не используются)
+├── backend/                    ← FastAPI бэкенд (на Render)
+│   ├── app/
+│   │   ├── api/routes/         ← Все API endpoints
+│   │   ├── services/           ← Бизнес-логика
+│   │   └── core/               ← Конфиг, безопасность
+│   └── main.py
+├── wrangler.toml               ← Cloudflare конфигурация
+└── CLOUDFLARE_DEPLOY.md        ← Этот файл
 ```
 
 ## Как это работает
 
-1. **Cloudflare Pages** отдаёт статику из `frontend/dist` (React SPA)
-2. Все запросы к `/api/*` перехватываются Pages Functions
-3. **Hono** обрабатывает роутинг (аналог FastAPI)
-4. Данные хранятся **in-memory** (заглушка для Google Sheets)
-5. **JWT** и **Telegram initData** работают через Web Crypto API
+1. **Cloudflare Pages** отдаёт статику React SPA из `frontend/dist`
+2. Все API запросы идут напрямую на **Render** (`https://edypulse.onrender.com/api/*`)
+3. **FastAPI** на Render обрабатывает роутинг, авторизацию и бизнес-логику
+4. **Google Sheets** используется как база данных (in-memory если не настроен)
+5. Cloudflare Functions больше **не участвуют** в обработке API
 
-## Известные ограничения
+## Отладка
 
-- **Google Sheets** — заглушен, использует in-memory (данные сбрасываются)
-- **Telegram initData** — требует `TELEGRAM_BOT_TOKEN` в production
-- **Wrangler** — для продакшена рекомендуется деплой через Cloudflare Dashboard
-- **Compatibility flag** — требуется `nodejs_compat` (уже в `wrangler.toml`)
+### Проверка, куда идут запросы
+
+Откройте DevTools (F12) → Network tab → найдите любой XHR/Fetch запрос.
+URL должен начинаться с `https://edypulse.onrender.com/api/...`.
+
+Если запросы идут на `edypulse.pages.dev/api/...` — значит `VITE_API_URL` не установлен.
+
+### Проверка бэкенда
+
+```bash
+curl https://edypulse.onrender.com/api/health
+# → {"status":"ok","version":"1.0.0",...}
+```
+
+Swagger-документация: https://edypulse.onrender.com/docs
