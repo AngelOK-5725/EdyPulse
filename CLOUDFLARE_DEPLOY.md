@@ -34,7 +34,7 @@
 |------|----------|
 | **Project name** | `edupulse` |
 | **Production branch** | `main` |
-| **Build command** | `cd frontend && npm install && npm run build` |
+| **Build command** | `cd frontend && npm install && npm run build && cd ../functions && npm install` |
 | **Build output directory** | `frontend/dist` |
 | **Root directory** | (оставьте пустым — корень репозитория) |
 
@@ -42,6 +42,7 @@
 6. Нажмите **Save and Deploy**
 
 Cloudflare Pages автоматически:
+- Установит зависимости Functions (`hono`)
 - Соберёт React фронтенд
 - Обнаружит `functions/` директорию
 - Запустит Pages Functions как API-бэкенд
