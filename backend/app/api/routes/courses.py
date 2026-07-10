@@ -71,7 +71,7 @@ async def api_create_course(body: CourseCreate, current_user: CurrentUser):
     """Create a new course."""
     data = body.model_dump()
     data["teacher_id"] = current_user.telegram_id
-    result = create_course(data)
+    result = create_course(data, telegram_id=current_user.telegram_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create course")
     return result

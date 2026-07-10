@@ -66,8 +66,12 @@ def get_lesson(lesson_id: str) -> Optional[dict]:
         return None
 
 
-def create_lesson(data: dict) -> Optional[dict]:
-    """Create a lesson manually."""
+def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Create a lesson manually.
+
+    If telegram_id is provided, resolves the internal user_id
+    and records it as the owner of this lesson record.
+    """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
     record = {
@@ -85,6 +89,12 @@ def create_lesson(data: dict) -> Optional[dict]:
         "is_active": "true",
         "created_at": now,
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:
@@ -93,7 +103,8 @@ def create_lesson(data: dict) -> Optional[dict]:
 
 
 def update_lesson(lesson_id: str, data: dict) -> bool:
-    """Update a lesson."""
+    """Update a lesson. Never allows changing the owner (user_id)."""
+    data.pop("user_id", None)
     repo = _get_repo()
     try:
         return repo.update(lesson_id, data)
@@ -115,11 +126,12 @@ def delete_lesson(lesson_id: str) -> bool:
 # ─── Auto-generation ────────────────────────────────────────────────────────
 
 
-def ensure_lesson_for_course(course: dict, target_date: str) -> Optional[dict]:
+def ensure_lesson_for_course(course: dict, target_date: str, telegram_id: Optional[int] = None) -> Optional[dict]:
     """Auto-create a Lesson if one doesn't exist for this course+date.
 
     Called when a teacher opens a lesson page or when dashboard loads.
     Returns existing or new lesson.
+    If telegram_id is provided, it's forwarded to create_lesson for ownership recording.
     """
     repo = _get_repo()
     try:
@@ -137,17 +149,18 @@ def ensure_lesson_for_course(course: dict, target_date: str) -> Optional[dict]:
             "status": "scheduled",
             "location": course.get("location", ""),
             "location_link": course.get("location_link", ""),
-        })
+        }, telegram_id=telegram_id)
         return lesson
     except Exception as e:
         logger.error(f"Failed to ensure lesson for {course.get('id')} on {target_date}: {e}")
         return None
 
 
-def ensure_today_lessons(courses: list[dict]) -> list[dict]:
+def ensure_today_lessons(courses: list[dict], telegram_id: Optional[int] = None) -> list[dict]:
     """Ensure lessons exist for all courses that have class today.
 
     Returns the list of today's lessons.
+    If telegram_id is provided, it's forwarded for ownership recording on new lessons.
     """
     today_str = date.today().isoformat()
     weekday_map = {
@@ -165,7 +178,7 @@ def ensure_today_lessons(courses: list[dict]) -> list[dict]:
         if today_weekday not in days:
             continue
 
-        lesson = ensure_lesson_for_course(course, today_str)
+        lesson = ensure_lesson_for_course(course, today_str, telegram_id=telegram_id)
         if lesson:
             lessons.append(lesson)
 

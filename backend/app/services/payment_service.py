@@ -55,8 +55,12 @@ def get_student_payments(student_id: str) -> list[dict]:
         return []
 
 
-def create_payment(data: dict) -> Optional[dict]:
-    """Create a payment record in the journal."""
+def create_payment(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Create a payment record in the journal.
+
+    If telegram_id is provided, resolves the internal user_id
+    and records it as the owner of this payment record.
+    """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
     record = {
@@ -69,6 +73,12 @@ def create_payment(data: dict) -> Optional[dict]:
         "comment": data.get("comment", ""),
         "created_at": now,
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:
@@ -77,7 +87,8 @@ def create_payment(data: dict) -> Optional[dict]:
 
 
 def update_payment(payment_id: str, data: dict) -> bool:
-    """Update a payment record."""
+    """Update a payment record. Never allows changing the owner (user_id)."""
+    data.pop("user_id", None)
     repo = _get_repo()
     try:
         return repo.update(payment_id, data)

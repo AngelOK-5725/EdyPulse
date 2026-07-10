@@ -52,8 +52,12 @@ def get_course(course_id: str) -> Optional[dict]:
         return None
 
 
-def create_course(data: dict) -> Optional[dict]:
-    """Create a new course."""
+def create_course(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Create a new course.
+
+    If telegram_id is provided, resolves the internal user_id
+    and records it as the owner of this course record.
+    """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
     record = {
@@ -76,6 +80,12 @@ def create_course(data: dict) -> Optional[dict]:
         "lessons_per_week": str(data.get("lessons_per_week", "")) if data.get("lessons_per_week") else "",
         "payment_type": data.get("payment_type", "monthly"),
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:
@@ -84,7 +94,8 @@ def create_course(data: dict) -> Optional[dict]:
 
 
 def update_course(course_id: str, data: dict) -> bool:
-    """Update a course."""
+    """Update a course. Never allows changing the owner (user_id)."""
+    data.pop("user_id", None)
     repo = _get_repo()
     try:
         return repo.update(course_id, data)

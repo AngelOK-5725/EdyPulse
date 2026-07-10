@@ -119,6 +119,21 @@ def get_user_by_telegram_id(telegram_id: int) -> Optional[dict]:
     return None
 
 
+def _resolve_user_id(telegram_id: int) -> Optional[str]:
+    """Resolve the internal user_id from a telegram_id.
+
+    This is a TEMPORARY helper for Stage 3 (owner recording).
+    It will be replaced once user_id is embedded in the JWT token.
+
+    Returns the internal user ID (e.g. "usr_A7KD91PQ" or a numeric string
+    for legacy users), or None if the user is not found.
+    """
+    user = get_user_by_telegram_id(telegram_id)
+    if user:
+        return str(user.get("id", ""))
+    return None
+
+
 def update_user_role(telegram_id: int, new_role: str) -> bool:
     """Update a user's role (admin only)."""
     repo = _get_users_repo()

@@ -80,7 +80,7 @@ async def api_student_profile(student_id: str, current_user: CurrentUser):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def api_create_student(body: StudentCreate, admin: AdminOnly):
     """Create a new student (admin only)."""
-    result = create_student(body.model_dump())
+    result = create_student(body.model_dump(), telegram_id=admin.telegram_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create student")
     return result

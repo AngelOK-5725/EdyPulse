@@ -54,7 +54,12 @@ def get_student(student_id: str) -> Optional[dict]:
         return None
 
 
-def create_student(data: dict) -> Optional[dict]:
+def create_student(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Create a new student.
+
+    If telegram_id is provided, resolves the internal user_id
+    and records it as the owner of this student record.
+    """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
     record = {
@@ -74,6 +79,12 @@ def create_student(data: dict) -> Optional[dict]:
         "is_active": "true",
         "created_at": now,
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:
@@ -82,6 +93,8 @@ def create_student(data: dict) -> Optional[dict]:
 
 
 def update_student(student_id: str, data: dict) -> bool:
+    """Update a student. Never allows changing the owner (user_id)."""
+    data.pop("user_id", None)
     repo = _get_repo()
     try:
         return repo.update(student_id, data)

@@ -61,7 +61,7 @@ async def api_today_lessons(current_user: CurrentUser):
     from backend.app.services.lesson_service import ensure_today_lessons
 
     courses = list_courses()
-    lessons = ensure_today_lessons(courses)
+    lessons = ensure_today_lessons(courses, telegram_id=current_user.telegram_id)
     all_students = list_students()
     from datetime import date
     all_attendance = list_attendance(date=date.today().isoformat())
@@ -88,9 +88,9 @@ async def api_ensure_lesson(body: LessonCreate, current_user: CurrentUser):
         course = get_course(body.course_id)
         if not course:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-        lesson = ensure_lesson_for_course(course, body.date)
+        lesson = ensure_lesson_for_course(course, body.date, telegram_id=current_user.telegram_id)
     else:
-        lesson = create_lesson(body.model_dump())
+        lesson = create_lesson(body.model_dump(), telegram_id=current_user.telegram_id)
 
     if not lesson:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create lesson")
@@ -103,7 +103,7 @@ async def api_ensure_lesson(body: LessonCreate, current_user: CurrentUser):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def api_create_lesson(body: LessonCreate, current_user: CurrentUser):
     """Create a one-off lesson manually."""
-    result = create_lesson(body.model_dump())
+    result = create_lesson(body.model_dump(), telegram_id=current_user.telegram_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create lesson")
     all_students = list_students()

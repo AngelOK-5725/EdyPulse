@@ -44,8 +44,12 @@ def list_achievements(student_id: Optional[str] = None) -> list[dict]:
         return []
 
 
-def create_achievement(data: dict) -> Optional[dict]:
-    """Create an achievement record."""
+def create_achievement(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Create an achievement record.
+
+    If telegram_id is provided, resolves the internal user_id
+    and records it as the owner of this achievement record.
+    """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
     record = {
@@ -57,6 +61,12 @@ def create_achievement(data: dict) -> Optional[dict]:
         "achieved_at": data.get("achieved_at", now),
         "created_at": now,
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:

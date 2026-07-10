@@ -51,7 +51,7 @@ async def api_create_payment(body: PaymentCreate, admin: AdminOnly):
     if not data.get("payment_date"):
         from datetime import date
         data["payment_date"] = date.today().isoformat()
-    result = create_payment(data)
+    result = create_payment(data, telegram_id=admin.telegram_id)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

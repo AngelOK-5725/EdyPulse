@@ -56,11 +56,12 @@ def get_student_attendance(student_id: str) -> list[dict]:
         return []
 
 
-def mark_attendance(data: dict) -> Optional[dict]:
+def mark_attendance(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
     """Create or update an attendance record (upsert).
 
     If a record already exists for the same student/course/date (or lesson_id),
     it updates instead of duplicating.
+    If telegram_id is provided, resolves the internal user_id for new records.
     """
     student_id = data.get("student_id", "")
     course_id = data.get("course_id", "")
@@ -109,6 +110,12 @@ def mark_attendance(data: dict) -> Optional[dict]:
         "marked_by": str(data.get("marked_by", "")),
         "created_at": now,
     }
+    # Record the owner if we have a telegram_id
+    if telegram_id is not None:
+        from backend.app.services.user_service import _resolve_user_id
+        owner_id = _resolve_user_id(telegram_id)
+        if owner_id:
+            record["user_id"] = owner_id
     try:
         return repo.create(record)
     except Exception as e:
@@ -117,7 +124,8 @@ def mark_attendance(data: dict) -> Optional[dict]:
 
 
 def update_attendance(attendance_id: str, data: dict) -> bool:
-    """Update an attendance record."""
+    """Update an attendance record. Never allows changing the owner (user_id)."""
+    data.pop("user_id", None)
     repo = _get_repo()
     try:
         return repo.update(attendance_id, data)

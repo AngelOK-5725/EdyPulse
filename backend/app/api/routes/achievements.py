@@ -35,7 +35,7 @@ async def api_list_achievements(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def api_create_achievement(body: AchievementCreate, admin: AdminOnly):
     """Create an achievement (admin only)."""
-    result = create_achievement(body.model_dump())
+    result = create_achievement(body.model_dump(), telegram_id=admin.telegram_id)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

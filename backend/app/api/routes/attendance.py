@@ -60,7 +60,7 @@ async def api_mark_attendance(body: AttendanceMark, current_user: CurrentUser):
     """Mark attendance for a student."""
     data = body.model_dump()
     data["marked_by"] = current_user.telegram_id
-    result = mark_attendance(data)
+    result = mark_attendance(data, telegram_id=current_user.telegram_id)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
