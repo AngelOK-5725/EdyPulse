@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type StudentProfile, type Course } from '../services/api';
+import { validateStudentForm, hasErrors, type StudentFormErrors } from '../services/validation';
 
 const STATUS_ICONS: Record<string, { icon: string; label: string; color: string }> = {
   present: { icon: '✅', label: 'Был', color: 'text-green-600 bg-green-50 border-green-200' },
@@ -30,6 +31,7 @@ export default function StudentCardPage() {
   const [showAllPayments, setShowAllPayments] = useState(false);
 
   // ── Edit mode state ───────────────────────────────────────────────
+  // ── Edit mode state ───────────────────────────────────────────────
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -44,8 +46,13 @@ export default function StudentCardPage() {
     parent_relation: '',
     photo_url: '',
   });
+  const [editFormErrors, setEditFormErrors] = useState<StudentFormErrors>({});
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+
+  // ── Archive modal state ────────────────────────────────────────────
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   // ── Payment modal state ────────────────────────────────────────────
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -185,6 +192,7 @@ export default function StudentCardPage() {
 
   const cancelEditing = () => {
     setEditing(false);
+    setEditFormErrors({});
     setEditForm({
       first_name: '', last_name: '', age: '', birth_date: '',
       phone: '', telegram: '', parent_contact: '', parent_name: '',
@@ -192,8 +200,26 @@ export default function StudentCardPage() {
     });
   };
 
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditForm(f => ({ ...f, [field]: value }));
+    // Clear the error for this field as user types
+    if (field in editFormErrors) {
+      setEditFormErrors(prev => {
+        const next = { ...prev };
+        delete next[field as keyof StudentFormErrors];
+        return next;
+      });
+    }
+  };
+
   const saveEdits = async () => {
     if (!profile || !id) return;
+
+    // Validate form
+    const errors = validateStudentForm(editForm);
+    setEditFormErrors(errors);
+    if (hasErrors(errors)) return;
+
     setSaving(true);
     try {
       await api.updateStudent(id, {
@@ -209,10 +235,12 @@ export default function StudentCardPage() {
         photo_url: editForm.photo_url || undefined,
         course_ids: selectedCourseIds.join(','),
       });
+      setEditFormErrors({});
       await loadProfile(id);
       setEditing(false);
     } catch (e) {
       console.error('Failed to save:', e);
+      alert('Ошибка при сохранении');
     } finally {
       setSaving(false);
     }
@@ -342,15 +370,27 @@ export default function StudentCardPage() {
         <div className="tg-card space-y-3">
           <h3 className="text-xs font-semibold text-[var(--tg-theme-hint-color)] uppercase tracking-wide">Личные данные</h3>
           <div className="flex gap-2">
-            <input value={editForm.first_name} onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))}
-              placeholder="Имя" className="flex-1 px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
-            <input value={editForm.last_name} onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))}
-              placeholder="Фамилия" className="flex-1 px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            <div className="flex-1">
+              <input value={editForm.first_name} onChange={e => handleEditFormChange('first_name', e.target.value)}
+                placeholder="Имя *"
+                className={`w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${editFormErrors.first_name ? 'ring-2 ring-red-300' : ''}`} />
+              {editFormErrors.first_name && <p className="text-xs text-red-500 mt-1">{editFormErrors.first_name}</p>}
+            </div>
+            <div className="flex-1">
+              <input value={editForm.last_name} onChange={e => handleEditFormChange('last_name', e.target.value)}
+                placeholder="Фамилия *"
+                className={`w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${editFormErrors.last_name ? 'ring-2 ring-red-300' : ''}`} />
+              {editFormErrors.last_name && <p className="text-xs text-red-500 mt-1">{editFormErrors.last_name}</p>}
+            </div>
           </div>
           <div className="flex gap-2">
-            <input value={editForm.age} onChange={e => setEditForm(f => ({ ...f, age: e.target.value }))}
-              placeholder="Возраст" type="number" className="w-1/3 px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
-            <input value={editForm.birth_date} onChange={e => setEditForm(f => ({ ...f, birth_date: e.target.value }))}
+            <div className="w-1/3">
+              <input value={editForm.age} onChange={e => handleEditFormChange('age', e.target.value)}
+                placeholder="Возраст" type="number" min="3" max="99"
+                className={`w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${editFormErrors.age ? 'ring-2 ring-red-300' : ''}`} />
+              {editFormErrors.age && <p className="text-xs text-red-500 mt-1">{editFormErrors.age}</p>}
+            </div>
+            <input value={editForm.birth_date} onChange={e => handleEditFormChange('birth_date', e.target.value)}
               placeholder="Дата рождения" type="date" className="flex-1 px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
           </div>
         </div>
@@ -358,9 +398,13 @@ export default function StudentCardPage() {
         {/* Contact fields */}
         <div className="tg-card space-y-3">
           <h3 className="text-xs font-semibold text-[var(--tg-theme-hint-color)] uppercase tracking-wide">Контакты</h3>
-          <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-            placeholder="Телефон ученика" className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
-          <input value={editForm.telegram} onChange={e => setEditForm(f => ({ ...f, telegram: e.target.value }))}
+          <div>
+            <input value={editForm.phone} onChange={e => handleEditFormChange('phone', e.target.value)}
+              placeholder="Телефон ученика"
+              className={`w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${editFormErrors.phone ? 'ring-2 ring-red-300' : ''}`} />
+            {editFormErrors.phone && <p className="text-xs text-red-500 mt-1">{editFormErrors.phone}</p>}
+          </div>
+          <input value={editForm.telegram} onChange={e => handleEditFormChange('telegram', e.target.value)}
             placeholder="@telegram" className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
         </div>
 
@@ -376,8 +420,12 @@ export default function StudentCardPage() {
             <input value={editForm.parent_name} onChange={e => setEditForm(f => ({ ...f, parent_name: e.target.value }))}
               placeholder="Имя" className="flex-1 px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
           </div>
-          <input value={editForm.parent_contact} onChange={e => setEditForm(f => ({ ...f, parent_contact: e.target.value }))}
-            placeholder="Телефон родителя" className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+          <div>
+            <input value={editForm.parent_contact} onChange={e => handleEditFormChange('parent_contact', e.target.value)}
+              placeholder="Телефон родителя"
+              className={`w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${editFormErrors.parent_contact ? 'ring-2 ring-red-300' : ''}`} />
+            {editFormErrors.parent_contact && <p className="text-xs text-red-500 mt-1">{editFormErrors.parent_contact}</p>}
+          </div>
         </div>
 
         {/* Courses */}
@@ -867,17 +915,47 @@ export default function StudentCardPage() {
         )}
       </div>
 
+      {/* ── Archive confirmation modal ─────────────────────────────── */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowArchiveModal(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up text-center"
+            onClick={e => e.stopPropagation()}>
+            <span className="text-5xl block mb-4">📦</span>
+            <h3 className="text-lg font-bold text-[var(--tg-theme-text-color)] mb-2">
+              Архивировать ученика?
+            </h3>
+            <p className="text-sm text-[var(--tg-theme-hint-color)] mb-6">
+              {student.first_name} {student.last_name} исчезнет из основного списка, но данные сохранятся.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowArchiveModal(false)}
+                className="flex-1 py-3 rounded-2xl border border-[var(--tg-theme-section-separator-color)] text-sm font-medium hover:opacity-80 transition-all">
+                Отмена
+              </button>
+              <button onClick={async () => {
+                setArchiving(true);
+                try {
+                  await api.deleteStudent(student.id);
+                  navigate('/school/students');
+                } catch (e) {
+                  console.error(e);
+                  setArchiving(false);
+                  setShowArchiveModal(false);
+                }
+              }} disabled={archiving}
+                className="flex-1 py-3 rounded-2xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-all active:scale-[0.98] disabled:opacity-50">
+                {archiving ? '⏳...' : 'Архивировать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Admin: Archive & Delete buttons ─────────────────────────── */}
       {isAdmin && (
         <div className="space-y-2">
-          <button
-            onClick={async () => {
-              if (!window.confirm(`Архивировать ученика ${student.first_name} ${student.last_name}? Он исчезнет из основного списка.`)) return;
-              try {
-                await api.deleteStudent(student.id);
-                navigate('/school/students');
-              } catch (e) { console.error(e); }
-            }}
+          <button onClick={() => setShowArchiveModal(true)}
             className="w-full py-3 rounded-2xl border border-amber-200 text-amber-600 text-sm font-medium hover:bg-amber-50 transition-all active:scale-[0.98]"
           >
             📦 Архивировать
