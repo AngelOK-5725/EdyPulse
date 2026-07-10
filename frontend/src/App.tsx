@@ -13,6 +13,8 @@ import AdminPaymentsPage from './pages/admin/AdminPaymentsPage';
 import StudentCardPage from './pages/StudentCardPage';
 import LessonDetailPage from './pages/LessonDetailPage';
 import SystemPage from './pages/SystemPage';
+import SchoolPage from './pages/SchoolPage';
+import UnderConstructionPage from './pages/UnderConstructionPage';
 
 function AppContent() {
   const { loading } = useAuth();
@@ -46,6 +48,12 @@ function AppContent() {
           <Route path="/admin/payments" element={<AdminPaymentsPage />} />
           <Route path="/student/:id" element={<StudentCardPage />} />
           <Route path="/lesson/:lessonId" element={<LessonDetailPage />} />
+          <Route path="/school" element={<SchoolPage />} />
+          <Route path="/school/students" element={<UnderConstructionPage />} />
+          <Route path="/school/courses" element={<UnderConstructionPage />} />
+          <Route path="/school/lessons" element={<UnderConstructionPage />} />
+          <Route path="/school/payments" element={<UnderConstructionPage />} />
+          <Route path="/school/achievements" element={<UnderConstructionPage />} />
           <Route path="/owner" element={<SystemPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
