@@ -17,11 +17,17 @@ export default function AccountPage() {
 
   const roleInfo = roleLabels[user?.role || 'user'];
 
-  // Формируем полное имя, безопасно обрабатывая отсутствующие части
-  const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Пользователь';
-  const displayPhoto = telegramUser?.photo_url || user?.photo_url;
+  // Приоритет: Telegram Mini App (initDataUnsafe.user) → Backend (AuthContext)
+  // Telegram — источник правды для first_name, last_name, username, photo_url
+  const firstName = telegramUser?.first_name || user?.first_name || '';
+  const lastName = telegramUser?.last_name || user?.last_name || '';
   const displayUsername = telegramUser?.username || user?.username;
+  const displayPhoto = telegramUser?.photo_url || user?.photo_url;
   const displayTelegramId = telegramUser?.id || user?.telegram_id;
+
+  // Имя: если нет first_name + last_name, показываем @username
+  const displayName = [firstName, lastName].filter(Boolean).join(' ')
+    || (displayUsername ? `@${displayUsername}` : 'Telegram User');
 
   return (
     <div className="p-4 space-y-4 animate-fade-in">
