@@ -7,6 +7,7 @@ PAYMENTS_HEADERS = [
     "id", "student_id", "course_id", "amount",
     "payment_date", "payment_type", "months_covered",
     "comment", "created_at",
+    "user_id", "updated_at",
 ]
 
 

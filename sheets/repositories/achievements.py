@@ -6,6 +6,7 @@ from sheets.repositories.base import BaseRepository
 ACHIEVEMENTS_HEADERS = [
     "id", "student_id", "title", "icon",
     "description", "achieved_at", "created_at",
+    "user_id", "updated_at",
 ]
 
 

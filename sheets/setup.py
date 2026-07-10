@@ -23,29 +23,35 @@ SHEETS_CONFIG = {
     "Users": [
         "id", "telegram_id", "first_name", "last_name", "username",
         "photo_url", "role", "is_active", "created_at",
+        "updated_at",
     ],
     "Courses": [
         "id", "title", "description", "days", "time",
         "price", "teacher_id", "color", "student_ids",
         "is_active", "created_at",
+        "user_id", "updated_at",
     ],
     "Students": [
         "id", "first_name", "last_name", "age", "birth_date",
         "parent_contact", "phone", "telegram", "course_ids",
         "start_date", "photo_url", "is_active", "created_at",
+        "user_id", "updated_at",
     ],
     "Attendance": [
         "id", "date", "course_id", "student_id",
         "status", "comment", "marked_by", "created_at",
+        "user_id", "updated_at",
     ],
     "Payments": [
         "id", "student_id", "course_id", "amount",
         "payment_date", "next_payment_date", "status",
         "comment", "created_at",
+        "user_id", "updated_at",
     ],
     "Achievements": [
         "id", "student_id", "title", "icon",
         "description", "achieved_at", "created_at",
+        "user_id", "updated_at",
     ],
 }
 

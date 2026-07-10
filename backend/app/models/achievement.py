@@ -10,3 +10,5 @@ class Achievement(BaseModel):
     description: Optional[str] = None
     achieved_at: str = ""
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""

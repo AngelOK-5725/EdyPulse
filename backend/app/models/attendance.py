@@ -21,3 +21,5 @@ class Attendance(BaseModel):
     comment: Optional[str] = None
     marked_by: Optional[int] = None
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""

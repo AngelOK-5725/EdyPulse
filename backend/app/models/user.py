@@ -20,3 +20,4 @@ class User(BaseModel):
     role: UserRole = UserRole.USER
     is_active: bool = True
     created_at: str = ""
+    updated_at: str = ""

@@ -18,3 +18,5 @@ class Student(BaseModel):
     photo_url: Optional[str] = None
     is_active: bool = True
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""

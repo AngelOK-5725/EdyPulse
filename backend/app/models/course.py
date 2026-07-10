@@ -23,6 +23,8 @@ class Course(BaseModel):
     location_link: Optional[str] = None
     is_active: bool = True
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""
 
     # Tariff fields
     monthly_price: Optional[float] = None

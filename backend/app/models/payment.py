@@ -19,3 +19,5 @@ class Payment(BaseModel):
     payment_type: PaymentType = PaymentType.PARTIAL
     comment: Optional[str] = None
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""

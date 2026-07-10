@@ -6,6 +6,7 @@ LESSONS_HEADERS = [
     "id", "course_id", "date", "time", "title",
     "status", "rescheduled_to", "homework", "location", "location_link",
     "note", "is_active", "created_at",
+    "user_id", "updated_at",
 ]
 
 

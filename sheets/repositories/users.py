@@ -6,6 +6,7 @@ from sheets.repositories.base import BaseRepository
 USERS_HEADERS = [
     "id", "telegram_id", "first_name", "last_name",
     "username", "photo_url", "role", "is_active", "created_at",
+    "updated_at",
 ]
 
 

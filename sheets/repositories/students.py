@@ -7,6 +7,7 @@ STUDENTS_HEADERS = [
     "id", "first_name", "last_name", "age", "birth_date",
     "parent_contact", "phone", "telegram", "course_ids",
     "start_date", "photo_url", "is_active", "created_at",
+    "user_id", "updated_at",
 ]
 
 

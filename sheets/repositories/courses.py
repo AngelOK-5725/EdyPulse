@@ -8,6 +8,7 @@ COURSES_HEADERS = [
     "price", "teacher_id", "color", "student_ids",
     "location", "location_link",
     "is_active", "created_at",
+    "user_id", "updated_at",
     "monthly_price", "lesson_price", "lessons_per_week", "payment_type",
 ]
 

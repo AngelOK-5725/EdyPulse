@@ -24,3 +24,5 @@ class Lesson(BaseModel):
     note: str = ""
     is_active: bool = True
     created_at: str = ""
+    user_id: str = ""
+    updated_at: str = ""
