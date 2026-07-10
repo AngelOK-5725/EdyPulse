@@ -15,7 +15,7 @@ import LessonDetailPage from './pages/LessonDetailPage';
 import SystemPage from './pages/SystemPage';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -32,32 +32,6 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-[var(--tg-theme-secondary-bg-color)] flex flex-col safe-top">
-      {/* Header */}
-      <header className="px-4 py-3 bg-[var(--tg-theme-bg-color)] border-b border-[var(--tg-theme-section-separator-color)]">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-[var(--tg-theme-text-color)]">
-            EduPulse
-          </h1>
-          {user && (
-            <div className="flex items-center gap-2">
-              {user.photo_url && (
-                <img
-                  src={user.photo_url}
-                  alt=""
-                  className="w-8 h-8 rounded-full"
-                />
-              )}
-              <span className="text-sm font-medium text-[var(--tg-theme-text-color)]">
-                {user.first_name}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium border border-blue-100">
-                {user.role === 'admin' ? 'A' : user.role === 'tester' ? 'T' : 'U'}
-              </span>
-            </div>
-          )}
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20">
         <Routes>
