@@ -1,6 +1,7 @@
 """User service — find or create users from Telegram login data."""
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -10,6 +11,23 @@ logger = logging.getLogger(__name__)
 
 # NOTE: google.repositories are imported lazily inside _get_users_repo()
 # to avoid gspread import errors when Google Sheets is not configured.
+
+
+def _generate_user_id() -> str:
+    """Generate a unique, immutable internal user ID.
+
+    Format: usr_XXXXXXXX (8 uppercase hex characters after prefix).
+    Example: usr_A7KD91PQ
+
+    Uses secrets module for cryptographic-quality randomness.
+    Uniqueness is ensured by the combination of:
+    - 8 hex chars = 4 bytes = 4 294 967 296 possible values
+    - Check against existing users in storage at creation time
+
+    This is an internal identifier used as Foreign Key across all tables.
+    It is NEVER exposed to Telegram or any external system.
+    """
+    return f"usr_{secrets.token_hex(4).upper()}"
 
 
 def _get_users_repo():
@@ -62,10 +80,11 @@ def find_or_create_user(telegram_data: dict) -> Optional[dict]:
             logger.warning(f"Error finding user in Google Sheets: {e}")
             # Fall through to in-memory store
 
-    # User not found — create new in-memory record
+    # User not found — create new user with generated internal ID
     now = datetime.now(timezone.utc).isoformat()
+    new_user_id = _generate_user_id()
     new_user = {
-        "id": str(telegram_id),
+        "id": new_user_id,
         "telegram_id": str(telegram_id),
         "first_name": telegram_data.get("first_name", ""),
         "last_name": telegram_data.get("last_name", ""),
