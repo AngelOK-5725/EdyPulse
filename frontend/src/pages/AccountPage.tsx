@@ -5,6 +5,9 @@ export default function AccountPage() {
   const { user, logout, isAdmin, isOwner } = useAuth();
   const navigate = useNavigate();
 
+  // Получаем данные пользователя напрямую из Telegram Mini App
+  const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+
   const roleLabels: Record<string, { label: string; color: string }> = {
     owner: { label: 'Владелец', color: 'bg-purple-50 text-purple-600 border-purple-100' },
     admin: { label: 'Администратор', color: 'bg-blue-50 text-blue-600 border-blue-100' },
@@ -14,27 +17,38 @@ export default function AccountPage() {
 
   const roleInfo = roleLabels[user?.role || 'user'];
 
+  // Формируем полное имя, безопасно обрабатывая отсутствующие части
+  const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Пользователь';
+  const displayPhoto = telegramUser?.photo_url || user?.photo_url;
+  const displayUsername = telegramUser?.username || user?.username;
+  const displayTelegramId = telegramUser?.id || user?.telegram_id;
+
   return (
     <div className="p-4 space-y-4 animate-fade-in">
       {/* Profile Card */}
       <div className="tg-card flex flex-col items-center py-6">
-        {user?.photo_url ? (
+        {displayPhoto ? (
           <img
-            src={user.photo_url}
+            src={displayPhoto}
             alt=""
             className="w-20 h-20 rounded-full mb-3 border-2 border-[var(--tg-theme-button-color)]"
           />
         ) : (
-          <div className="w-20 h-20 rounded-full bg-[var(--tg-theme-button-color)] flex items-center justify-center text-3xl text-white mb-3">
-            {user?.first_name?.[0] || '?'}
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--tg-theme-button-color)] to-purple-600 flex items-center justify-center text-3xl text-white mb-3 shadow-lg">
+            {displayName[0]}
           </div>
         )}
         <h2 className="text-xl font-bold text-[var(--tg-theme-text-color)]">
-          {user?.first_name} {user?.last_name}
+          {displayName}
         </h2>
-        {user?.username && (
-          <span className="text-sm text-[var(--tg-theme-hint-color)] mt-1">
-            @{user.username}
+        {displayUsername && (
+          <span className="text-sm text-[var(--tg-theme-hint-color)] mt-0.5">
+            @{displayUsername}
+          </span>
+        )}
+        {displayTelegramId && (
+          <span className="text-xs text-[var(--tg-theme-hint-color)] mt-0.5 opacity-60">
+            ID: {displayTelegramId}
           </span>
         )}
         <div className={`mt-3 px-4 py-1.5 rounded-full text-sm font-medium border ${roleInfo.color}`}>
