@@ -68,6 +68,9 @@ def get_student(student_id: str, telegram_id: Optional[int] = None, role: Option
             return student
         if telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
+            if not user_id:
+                # Demo mode without Google Sheets — no user_id filtering
+                return student
             if user_id and student.get("user_id", "") in ("", user_id):
                 return student
             # User context provided but record belongs to someone else

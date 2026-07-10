@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type Course, type Student, type AttendanceRecord } from '../services/api';
+import { validateStudentForm, hasErrors, type StudentFormErrors } from '../services/validation';
 
 const STATUSES = [
   { key: 'present', label: 'Был', icon: '✅', color: 'green' },
@@ -70,6 +71,7 @@ export default function LessonDetailPage() {
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [addMode, setAddMode] = useState<'new' | 'existing'>('new');
   const [newStudent, setNewStudent] = useState({ first_name: '', last_name: '', phone: '' });
+  const [newStudentErrors, setNewStudentErrors] = useState<StudentFormErrors>({});
   const [addingStudent, setAddingStudent] = useState(false);
 
   // ── Existing student search state ──────────────────────────────────────
@@ -255,7 +257,11 @@ export default function LessonDetailPage() {
 
   // ── Add new student ─────────────────────────────────────────────────────
   const handleAddStudent = async () => {
-    if (!newStudent.first_name || !lesson || !lesson.course_id) return;
+    const errors = validateStudentForm({ ...newStudent, age: '' });
+    setNewStudentErrors(errors);
+    if (hasErrors(errors)) return;
+
+    if (!lesson || !lesson.course_id) return;
     setAddingStudent(true);
     try {
       const existingIds = course?.student_ids ? course.student_ids.split(',').filter(Boolean) : [];
@@ -282,6 +288,7 @@ export default function LessonDetailPage() {
 
       setShowAddStudent(false);
       setNewStudent({ first_name: '', last_name: '', phone: '' });
+      setNewStudentErrors({});
     } catch (e) { console.error('Failed to add student:', e); }
     finally { setAddingStudent(false); }
   };
@@ -627,21 +634,36 @@ export default function LessonDetailPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex gap-2">
-                  <input value={newStudent.first_name} onChange={e => setNewStudent(f => ({ ...f, first_name: e.target.value }))}
-                    placeholder="Имя *" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" autoFocus />
-                  <input value={newStudent.last_name} onChange={e => setNewStudent(f => ({ ...f, last_name: e.target.value }))}
-                    placeholder="Фамилия" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Имя *</label>
+                  <input value={newStudent.first_name} onChange={e => { setNewStudent(f => ({ ...f, first_name: e.target.value })); setNewStudentErrors(prev => ({ ...prev, first_name: undefined })); }}
+                    placeholder="Иван" autoFocus
+                    className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 ${newStudentErrors.first_name ? 'ring-2 ring-red-300' : ''}`} />
+                  {newStudentErrors.first_name && <p className="text-xs text-red-500 mt-0.5">{newStudentErrors.first_name}</p>}
                 </div>
-                <input value={newStudent.phone} onChange={e => setNewStudent(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="Телефон (необязательно)"
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Фамилия *</label>
+                  <input value={newStudent.last_name} onChange={e => { setNewStudent(f => ({ ...f, last_name: e.target.value })); setNewStudentErrors(prev => ({ ...prev, last_name: undefined })); }}
+                    placeholder="Петров"
+                    className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 ${newStudentErrors.last_name ? 'ring-2 ring-red-300' : ''}`} />
+                  {newStudentErrors.last_name && <p className="text-xs text-red-500 mt-0.5">{newStudentErrors.last_name}</p>}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Телефон</label>
+                  <input value={newStudent.phone} onChange={e => { setNewStudent(f => ({ ...f, phone: e.target.value })); setNewStudentErrors(prev => ({ ...prev, phone: undefined })); }}
+                    placeholder="+7 999 123-45-67"
+                    className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 ${newStudentErrors.phone ? 'ring-2 ring-red-300' : ''}`} />
+                  {newStudentErrors.phone && <p className="text-xs text-red-500 mt-0.5">{newStudentErrors.phone}</p>}
+                </div>
+
                 <p className="text-[10px] text-[var(--tg-theme-hint-color)]">
                   Ученик будет добавлен на этот курс и отмечен как <strong>пробное</strong>
                 </p>
                 <div className="flex gap-2 pt-1">
-                  <button onClick={() => setShowAddStudent(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
-                  <button onClick={handleAddStudent} disabled={!newStudent.first_name || addingStudent}
+                  <button onClick={() => { setShowAddStudent(false); setNewStudentErrors({}); }} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                  <button onClick={handleAddStudent} disabled={addingStudent}
                     className="tg-button flex-1 text-sm disabled:opacity-50">
                     {addingStudent ? 'Добавление...' : 'Добавить ✅'}
                   </button>

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import api, { type Student, type Course } from '../services/api';
+import { validateStudentForm, hasErrors, type StudentFormErrors } from '../services/validation';
 
 const RELATION_OPTIONS = ['Мама', 'Папа', 'Бабушка', 'Дедушка', 'Тетя', 'Дядя', 'Опекун'];
 
@@ -25,6 +26,7 @@ export default function StudentsPage() {
     parent_relation: '',
     course_ids: [] as string[],
   });
+  const [formErrors, setFormErrors] = useState<StudentFormErrors>({});
 
   useEffect(() => {
     loadData();
@@ -63,7 +65,10 @@ export default function StudentsPage() {
 
   // ── Create student ────────────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!form.first_name || !form.last_name) return;
+    const errors = validateStudentForm(form);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+
     setSaving(true);
     try {
       await api.createStudent({
@@ -73,12 +78,24 @@ export default function StudentsPage() {
       });
       setShowForm(false);
       setForm({ first_name: '', last_name: '', age: '', phone: '', parent_contact: '', parent_name: '', parent_relation: '', course_ids: [] });
+      setFormErrors({});
       await loadData();
     } catch (e) {
       console.error('Failed to create student:', e);
       alert('Ошибка при создании ученика');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFormChange = (field: string, value: string | string[]) => {
+    const updated = { ...form, [field]: value };
+    setForm(updated);
+    // Clear the error for this field as user types
+    if (formErrors[field as keyof StudentFormErrors]) {
+      const newErrors = { ...formErrors };
+      delete newErrors[field as keyof StudentFormErrors];
+      setFormErrors(newErrors);
     }
   };
 
@@ -147,35 +164,64 @@ export default function StudentsPage() {
         <div className="tg-card space-y-3 animate-slide-up">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-[var(--tg-theme-text-color)]">✏️ Новый ученик</h3>
-            <button onClick={() => setShowForm(false)} className="w-7 h-7 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-xs hover:opacity-70 transition-opacity">✕</button>
+            <button onClick={() => { setShowForm(false); setFormErrors({}); }} className="w-7 h-7 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-xs hover:opacity-70 transition-opacity">✕</button>
           </div>
 
-          <div className="flex gap-2">
-            <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
-              placeholder="Имя *" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
-            <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}
-              placeholder="Фамилия *" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Имя *</label>
+            <input value={form.first_name} onChange={e => handleFormChange('first_name', e.target.value)}
+              placeholder="Иван"
+              className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${formErrors.first_name ? 'ring-2 ring-red-300' : ''}`} />
+            {formErrors.first_name && <p className="text-xs text-red-500 mt-0.5">{formErrors.first_name}</p>}
           </div>
 
-          <div className="flex gap-2">
-            <input value={form.age} onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
-              placeholder="Возраст" type="number" className="w-1/3 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
-            <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              placeholder="Телефон" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Фамилия *</label>
+            <input value={form.last_name} onChange={e => handleFormChange('last_name', e.target.value)}
+              placeholder="Петров"
+              className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${formErrors.last_name ? 'ring-2 ring-red-300' : ''}`} />
+            {formErrors.last_name && <p className="text-xs text-red-500 mt-0.5">{formErrors.last_name}</p>}
           </div>
 
-          <div className="flex gap-2">
-            <select value={form.parent_relation} onChange={e => setForm(f => ({ ...f, parent_relation: e.target.value }))}
-              className="w-2/5 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30">
-              <option value="">Кто</option>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Возраст</label>
+            <input value={form.age} onChange={e => handleFormChange('age', e.target.value)}
+              placeholder="от 3 до 99" type="number" min="3" max="99"
+              className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${formErrors.age ? 'ring-2 ring-red-300' : ''}`} />
+            {formErrors.age && <p className="text-xs text-red-500 mt-0.5">{formErrors.age}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Телефон</label>
+            <input value={form.phone} onChange={e => handleFormChange('phone', e.target.value)}
+              placeholder="+7 999 123-45-67"
+              className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${formErrors.phone ? 'ring-2 ring-red-300' : ''}`} />
+            {formErrors.phone && <p className="text-xs text-red-500 mt-0.5">{formErrors.phone}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Кто (родитель)</label>
+            <select value={form.parent_relation} onChange={e => handleFormChange('parent_relation', e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30">
+              <option value="">Выберите</option>
               {RELATION_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
-            <input value={form.parent_name} onChange={e => setForm(f => ({ ...f, parent_name: e.target.value }))}
-              placeholder="Имя родителя" className="flex-1 px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
           </div>
 
-          <input value={form.parent_contact} onChange={e => setForm(f => ({ ...f, parent_contact: e.target.value }))}
-            placeholder="Телефон родителя" className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Имя родителя</label>
+            <input value={form.parent_name} onChange={e => handleFormChange('parent_name', e.target.value)}
+              placeholder="Ольга"
+              className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Телефон родителя</label>
+            <input value={form.parent_contact} onChange={e => handleFormChange('parent_contact', e.target.value)}
+              placeholder="+7 999 123-45-67"
+              className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${formErrors.parent_contact ? 'ring-2 ring-red-300' : ''}`} />
+            {formErrors.parent_contact && <p className="text-xs text-red-500 mt-0.5">{formErrors.parent_contact}</p>}
+          </div>
 
           {/* Course selection */}
           {courses.length > 0 && (
@@ -205,8 +251,8 @@ export default function StudentsPage() {
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={() => setShowForm(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
-            <button onClick={handleCreate} disabled={!form.first_name || !form.last_name || saving}
+            <button onClick={() => { setShowForm(false); setFormErrors({}); }} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+            <button onClick={handleCreate} disabled={saving}
               className="tg-button flex-1 text-sm disabled:opacity-50">
               {saving ? '⏳ Создание...' : '✓ Создать'}
             </button>
@@ -308,8 +354,10 @@ export default function StudentsPage() {
           onClick={() => {
             if (showForm) {
               setShowForm(false);
+              setFormErrors({});
             } else {
               setShowForm(true);
+              setFormErrors({});
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }
           }}
