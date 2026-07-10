@@ -80,10 +80,13 @@ def get_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional
             return lesson
         if telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
-            if user_id and lesson.get("user_id", "") in ("", user_id):
-                return lesson
-            # User context provided but record belongs to someone else
-            return None
+            if user_id is not None:
+                # We can verify ownership
+                if lesson.get("user_id", "") not in ("", user_id):
+                    return None
+            # If user_id is None we can't resolve user identity (e.g. no Google Sheets)
+            # Fall back to backward compatible mode — allow access
+            return lesson
         # No user context — backward compatible mode
         return lesson
     except Exception as e:

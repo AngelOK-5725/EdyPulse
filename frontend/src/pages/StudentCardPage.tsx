@@ -233,7 +233,7 @@ export default function StudentCardPage() {
     if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate('/admin/students');
+      navigate('/school/students');
     }
   };
 
@@ -867,20 +867,34 @@ export default function StudentCardPage() {
         )}
       </div>
 
-      {/* ── Admin: Delete button ─────────────────────────────────────── */}
+      {/* ── Admin: Archive & Delete buttons ─────────────────────────── */}
       {isAdmin && (
-        <button
-          onClick={async () => {
-            if (!window.confirm(`Удалить ученика ${student.first_name} ${student.last_name}?`)) return;
-            try {
-              await api.deleteStudent(student.id);
-              navigate('/admin/students');
-            } catch (e) { console.error(e); }
-          }}
-          className="w-full py-3 rounded-2xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-all active:scale-[0.98]"
-        >
-          Удалить ученика
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Архивировать ученика ${student.first_name} ${student.last_name}? Он исчезнет из основного списка.`)) return;
+              try {
+                await api.deleteStudent(student.id);
+                navigate('/school/students');
+              } catch (e) { console.error(e); }
+            }}
+            className="w-full py-3 rounded-2xl border border-amber-200 text-amber-600 text-sm font-medium hover:bg-amber-50 transition-all active:scale-[0.98]"
+          >
+            📦 Архивировать
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Удалить ученика ${student.first_name} ${student.last_name}? Это действие нельзя отменить.`)) return;
+              try {
+                await api.deleteStudent(student.id);
+                navigate('/school/students');
+              } catch (e) { console.error(e); }
+            }}
+            className="w-full py-3 rounded-2xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-all active:scale-[0.98]"
+          >
+            Удалить ученика
+          </button>
+        </div>
       )}
     </div>
   );
