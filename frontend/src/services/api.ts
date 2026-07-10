@@ -186,12 +186,7 @@ export interface DashboardData {
   summary: {
     total_courses: number;
     total_students: number;
-    payment_summary: {
-      paid: number;
-      pending: number;
-      overdue: number;
-      total: number;
-    };
+    total_payments: number;
   };
 }
 

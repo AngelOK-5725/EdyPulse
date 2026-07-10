@@ -64,8 +64,7 @@ export default function StatisticsPage() {
     : 0;
 
   // ── Payment stats ─────────────────────────────────────────────────────
-  const { paid, pending, overdue } = summary.payment_summary;
-  const totalPayments = paid + pending + overdue;
+  const totalPayments = summary.total_payments;
 
   return (
     <div className="p-4 space-y-4 animate-fade-in">
@@ -169,24 +168,10 @@ export default function StatisticsPage() {
               Нет записей об оплатах
             </p>
           ) : (
-            <>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-[var(--tg-theme-text-color)]">Оплачено</span>
-                <span className="text-sm font-semibold text-green-500">{paid}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-t border-[var(--tg-theme-section-separator-color)]">
-                <span className="text-sm text-[var(--tg-theme-text-color)]">Ожидает оплаты</span>
-                <span className="text-sm font-semibold text-amber-500">{pending}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-t border-[var(--tg-theme-section-separator-color)]">
-                <span className="text-sm text-[var(--tg-theme-text-color)]">Просрочено</span>
-                <span className="text-sm font-semibold text-red-500">{overdue}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-t border-[var(--tg-theme-section-separator-color)]">
-                <span className="text-sm text-[var(--tg-theme-text-color)]">Всего записей</span>
-                <span className="text-sm font-semibold text-[var(--tg-theme-text-color)]">{totalPayments}</span>
-              </div>
-            </>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-[var(--tg-theme-text-color)]">Всего платежей</span>
+              <span className="text-sm font-semibold text-[var(--tg-theme-text-color)]">{totalPayments}</span>
+            </div>
           )}
         </div>
       </div>
