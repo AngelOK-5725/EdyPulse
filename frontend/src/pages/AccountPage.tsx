@@ -119,6 +119,19 @@ export default function AccountPage() {
             <span className="text-sm text-[var(--tg-theme-hint-color)]">Платформа</span>
             <span className="text-sm text-[var(--tg-theme-text-color)]">Telegram Mini App</span>
           </div>
+
+          {/* Temporary diagnostic block — will be removed after validation */}
+          <div className="pt-3 mt-3 border-t border-[var(--tg-theme-section-separator-color)] space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--tg-theme-hint-color)]">Frontend</h4>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--tg-theme-hint-color)]">Commit</span>
+              <span className="text-sm font-mono text-[var(--tg-theme-text-color)]">{__APP_COMMIT__}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--tg-theme-hint-color)]">Build</span>
+              <span className="text-sm font-mono text-[var(--tg-theme-text-color)]">{__APP_BUILD_TIME__}</span>
+            </div>
+          </div>
         </div>
       </div>
 
