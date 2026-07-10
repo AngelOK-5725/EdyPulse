@@ -6,6 +6,8 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import LESSONS_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -40,11 +42,22 @@ def _parse_ids(ids_str: str) -> list[str]:
 # ─── CRUD ───────────────────────────────────────────────────────────────────
 
 
-def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None) -> list[dict]:
-    """List lessons, optionally filtered by date and/or course."""
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    """Filter records to only those accessible by a user: owned or legacy (user_id="")."""
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
+def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None,
+                 telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """List lessons, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         lessons = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            lessons = _user_filter(lessons, user_id)
         active = [l for l in lessons if l.get("is_active", "true") == "true"]
         if date_str:
             active = [l for l in active if l.get("date", "") == date_str]
@@ -56,11 +69,23 @@ def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None
         return []
 
 
-def get_lesson(lesson_id: str) -> Optional[dict]:
-    """Get a lesson by ID."""
+def get_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict]:
+    """Get a lesson by ID. Non-OWNER users can only access their own or legacy records."""
     repo = _get_repo()
     try:
-        return repo.get_by_id(lesson_id)
+        lesson = repo.get_by_id(lesson_id)
+        if not lesson:
+            return None
+        if is_owner_role(role or ""):
+            return lesson
+        if telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if user_id and lesson.get("user_id", "") in ("", user_id):
+                return lesson
+            # User context provided but record belongs to someone else
+            return None
+        # No user context — backward compatible mode
+        return lesson
     except Exception as e:
         logger.error(f"Failed to get lesson {lesson_id}: {e}")
         return None
@@ -91,8 +116,7 @@ def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
     }
     # Record the owner if we have a telegram_id
     if telegram_id is not None:
-        from backend.app.services.user_service import _resolve_user_id
-        owner_id = _resolve_user_id(telegram_id)
+        owner_id = get_internal_user_id(telegram_id)
         if owner_id:
             record["user_id"] = owner_id
     try:
@@ -102,9 +126,12 @@ def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
         return None
 
 
-def update_lesson(lesson_id: str, data: dict) -> bool:
-    """Update a lesson. Never allows changing the owner (user_id)."""
+def update_lesson(lesson_id: str, data: dict, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Update a lesson. Checks ownership and never allows changing the owner (user_id)."""
     data.pop("user_id", None)
+    existing = get_lesson(lesson_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.update(lesson_id, data)
@@ -113,8 +140,11 @@ def update_lesson(lesson_id: str, data: dict) -> bool:
         return False
 
 
-def delete_lesson(lesson_id: str) -> bool:
-    """Soft-delete a lesson."""
+def delete_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Soft-delete a lesson. Checks ownership first."""
+    existing = get_lesson(lesson_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.delete(lesson_id)

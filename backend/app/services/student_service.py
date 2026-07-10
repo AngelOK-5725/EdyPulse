@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import STUDENTS_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -31,11 +33,21 @@ def _get_memory_store():
     return _memory_store
 
 
-def list_students(course_id: Optional[str] = None) -> list[dict]:
-    """Get all active students, optionally filtered by course."""
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    """Filter records to only those accessible by a user: owned or legacy (user_id="")."""
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
+def list_students(telegram_id: Optional[int] = None, role: Optional[str] = None, course_id: Optional[str] = None) -> list[dict]:
+    """Get active students, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         students = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
         if course_id:
             return [s for s in active if course_id in s.get("course_ids", "").split(",")]
@@ -45,10 +57,23 @@ def list_students(course_id: Optional[str] = None) -> list[dict]:
         return []
 
 
-def get_student(student_id: str) -> Optional[dict]:
+def get_student(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict]:
+    """Get a student by ID. Non-OWNER users can only access their own or legacy records."""
     repo = _get_repo()
     try:
-        return repo.get_by_id(student_id)
+        student = repo.get_by_id(student_id)
+        if not student:
+            return None
+        if is_owner_role(role or ""):
+            return student
+        if telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if user_id and student.get("user_id", "") in ("", user_id):
+                return student
+            # User context provided but record belongs to someone else
+            return None
+        # No user context — backward compatible mode
+        return student
     except Exception as e:
         logger.error(f"Failed to get student {student_id}: {e}")
         return None
@@ -81,8 +106,7 @@ def create_student(data: dict, telegram_id: Optional[int] = None) -> Optional[di
     }
     # Record the owner if we have a telegram_id
     if telegram_id is not None:
-        from backend.app.services.user_service import _resolve_user_id
-        owner_id = _resolve_user_id(telegram_id)
+        owner_id = get_internal_user_id(telegram_id)
         if owner_id:
             record["user_id"] = owner_id
     try:
@@ -92,9 +116,13 @@ def create_student(data: dict, telegram_id: Optional[int] = None) -> Optional[di
         return None
 
 
-def update_student(student_id: str, data: dict) -> bool:
-    """Update a student. Never allows changing the owner (user_id)."""
+def update_student(student_id: str, data: dict, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Update a student. Checks ownership and never allows changing the owner (user_id)."""
     data.pop("user_id", None)
+    # Check ownership
+    existing = get_student(student_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.update(student_id, data)
@@ -115,7 +143,11 @@ def _normalize_course_ids(course_ids: Any) -> str:
     return ""
 
 
-def delete_student(student_id: str) -> bool:
+def delete_student(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Soft-delete a student. Checks ownership first."""
+    existing = get_student(student_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.delete(student_id)
@@ -124,14 +156,17 @@ def delete_student(student_id: str) -> bool:
         return False
 
 
-def search_students(query: str) -> list[dict]:
-    """Search active students by name (case-insensitive partial match on first_name or last_name)."""
+def search_students(query: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Search active students by name. Filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         students = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
         if not query:
-            return active[:20]  # return first 20 if no query
+            return active[:20]
         q = query.lower().strip()
         results = []
         for s in active:

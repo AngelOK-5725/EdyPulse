@@ -19,5 +19,5 @@ async def api_get_inbox(current_user: CurrentUser):
       - 🟡 Medium: trial students, long-absent students
       - 🟢 Low: completed lessons, upcoming actions
     """
-    inbox = get_inbox()
+    inbox = get_inbox(telegram_id=current_user.telegram_id, role=current_user.role.value)
     return inbox

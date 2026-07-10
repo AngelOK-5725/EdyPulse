@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import COURSES_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -31,22 +33,44 @@ def _get_memory_store():
     return _memory_store
 
 
-def list_courses() -> list[dict]:
-    """Get all active courses."""
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    """Filter records to only those accessible by a user: owned or legacy (user_id="")."""
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
+def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get active courses, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         courses = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            courses = _user_filter(courses, user_id)
         return [c for c in courses if c.get("is_active", "true") == "true"]
     except Exception as e:
         logger.error(f"Failed to list courses: {e}")
         return []
 
 
-def get_course(course_id: str) -> Optional[dict]:
-    """Get a course by ID."""
+def get_course(course_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict]:
+    """Get a course by ID. Non-OWNER users can only access their own or legacy records."""
     repo = _get_repo()
     try:
-        return repo.get_by_id(course_id)
+        course = repo.get_by_id(course_id)
+        if not course:
+            return None
+        if is_owner_role(role or ""):
+            return course
+        if telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if user_id and course.get("user_id", "") in ("", user_id):
+                return course
+            # User context provided but record belongs to someone else
+            return None
+        # No user context — backward compatible mode
+        return course
     except Exception as e:
         logger.error(f"Failed to get course {course_id}: {e}")
         return None
@@ -82,8 +106,7 @@ def create_course(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
     }
     # Record the owner if we have a telegram_id
     if telegram_id is not None:
-        from backend.app.services.user_service import _resolve_user_id
-        owner_id = _resolve_user_id(telegram_id)
+        owner_id = get_internal_user_id(telegram_id)
         if owner_id:
             record["user_id"] = owner_id
     try:
@@ -93,9 +116,12 @@ def create_course(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
         return None
 
 
-def update_course(course_id: str, data: dict) -> bool:
-    """Update a course. Never allows changing the owner (user_id)."""
+def update_course(course_id: str, data: dict, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Update a course. Checks ownership and never allows changing the owner (user_id)."""
     data.pop("user_id", None)
+    existing = get_course(course_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.update(course_id, data)
@@ -104,8 +130,11 @@ def update_course(course_id: str, data: dict) -> bool:
         return False
 
 
-def delete_course(course_id: str) -> bool:
-    """Soft-delete a course."""
+def delete_course(course_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Soft-delete a course. Checks ownership first."""
+    existing = get_course(course_id, telegram_id, role)
+    if not existing:
+        return False
     repo = _get_repo()
     try:
         return repo.delete(course_id)
@@ -114,12 +143,12 @@ def delete_course(course_id: str) -> bool:
         return False
 
 
-def enroll_student(course_id: str, student_id: str) -> bool:
+def enroll_student(course_id: str, student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
     """Enroll an existing student in a course (updates both course.student_ids and student.course_ids)."""
     from backend.app.services.student_service import get_student, update_student
 
-    course = get_course(course_id)
-    student = get_student(student_id)
+    course = get_course(course_id, telegram_id, role)
+    student = get_student(student_id, telegram_id, role)
     if not course or not student:
         return False
 
@@ -127,7 +156,7 @@ def enroll_student(course_id: str, student_id: str) -> bool:
     current_student_ids = _parse_ids(course.get("student_ids", ""))
     if student_id not in current_student_ids:
         current_student_ids.append(student_id)
-        course_ok = update_course(course_id, {"student_ids": ",".join(current_student_ids)})
+        course_ok = update_course(course_id, {"student_ids": ",".join(current_student_ids)}, telegram_id, role)
     else:
         course_ok = True
 
@@ -135,19 +164,19 @@ def enroll_student(course_id: str, student_id: str) -> bool:
     current_course_ids = _parse_ids(student.get("course_ids", ""))
     if course_id not in current_course_ids:
         current_course_ids.append(course_id)
-        student_ok = update_student(student_id, {"course_ids": ",".join(current_course_ids)})
+        student_ok = update_student(student_id, {"course_ids": ",".join(current_course_ids)}, telegram_id, role)
     else:
         student_ok = True
 
     return course_ok and student_ok
 
 
-def unenroll_student(course_id: str, student_id: str) -> bool:
+def unenroll_student(course_id: str, student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
     """Unenroll a student from a course (updates both sides)."""
     from backend.app.services.student_service import get_student, update_student
 
-    course = get_course(course_id)
-    student = get_student(student_id)
+    course = get_course(course_id, telegram_id, role)
+    student = get_student(student_id, telegram_id, role)
     if not course or not student:
         return False
 
@@ -155,7 +184,7 @@ def unenroll_student(course_id: str, student_id: str) -> bool:
     current_student_ids = _parse_ids(course.get("student_ids", ""))
     if student_id in current_student_ids:
         current_student_ids.remove(student_id)
-        course_ok = update_course(course_id, {"student_ids": ",".join(current_student_ids)})
+        course_ok = update_course(course_id, {"student_ids": ",".join(current_student_ids)}, telegram_id, role)
     else:
         course_ok = True
 
@@ -163,7 +192,7 @@ def unenroll_student(course_id: str, student_id: str) -> bool:
     current_course_ids = _parse_ids(student.get("course_ids", ""))
     if course_id in current_course_ids:
         current_course_ids.remove(course_id)
-        student_ok = update_student(student_id, {"course_ids": ",".join(current_course_ids)})
+        student_ok = update_student(student_id, {"course_ids": ",".join(current_course_ids)}, telegram_id, role)
     else:
         student_ok = True
 

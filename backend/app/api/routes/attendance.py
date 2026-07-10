@@ -19,7 +19,7 @@ async def api_today_attendance(current_user: CurrentUser):
     """Get all attendance records for today."""
     from datetime import date
     today_str = date.today().isoformat()
-    records = list_attendance(date=today_str)
+    records = list_attendance(date=today_str, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"attendance": records,"date": today_str}
 
 
@@ -44,14 +44,14 @@ async def api_list_attendance(
     date: Optional[str] = Query(None),
 ):
     """Get attendance records, optionally filtered by course and/or date."""
-    records = list_attendance(course_id, date)
+    records = list_attendance(course_id, date, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"attendance": records}
 
 
 @router.get("/student/{student_id}")
 async def api_student_attendance(student_id: str, current_user: CurrentUser):
     """Get all attendance records for a specific student."""
-    records = get_student_attendance(student_id)
+    records = get_student_attendance(student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"attendance": records}
 
 
@@ -73,7 +73,7 @@ async def api_mark_attendance(body: AttendanceMark, current_user: CurrentUser):
 async def api_update_attendance(attendance_id: str, body: AttendanceUpdate, current_user: CurrentUser):
     """Update an attendance record."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
-    success = update_attendance(attendance_id, data)
+    success = update_attendance(attendance_id, data, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendance not found")
     return {"status": "ok"}

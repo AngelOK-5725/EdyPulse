@@ -28,7 +28,7 @@ async def api_list_achievements(
     student_id: Optional[str] = Query(None),
 ):
     """Get all achievements, optionally filtered by student."""
-    achievements = list_achievements(student_id)
+    achievements = list_achievements(student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"achievements": achievements}
 
 
@@ -47,7 +47,7 @@ async def api_create_achievement(body: AchievementCreate, admin: AdminOnly):
 @router.delete("/{achievement_id}")
 async def api_delete_achievement(achievement_id: str, admin: AdminOnly):
     """Delete an achievement (admin only)."""
-    success = delete_achievement(achievement_id)
+    success = delete_achievement(achievement_id, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Achievement not found")
     return {"status": "ok"}

@@ -53,14 +53,14 @@ class CourseUpdate(BaseModel):
 @router.get("")
 async def api_list_courses(current_user: CurrentUser):
     """Get all active courses."""
-    courses = list_courses()
+    courses = list_courses(telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"courses": courses}
 
 
 @router.get("/{course_id}")
 async def api_get_course(course_id: str, current_user: CurrentUser):
     """Get a course by ID."""
-    course = get_course(course_id)
+    course = get_course(course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not course:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return course
@@ -81,7 +81,7 @@ async def api_create_course(body: CourseCreate, current_user: CurrentUser):
 async def api_update_course(course_id: str, body: CourseUpdate, current_user: CurrentUser):
     """Update a course."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
-    success = update_course(course_id, data)
+    success = update_course(course_id, data, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return {"status": "ok"}
@@ -90,7 +90,7 @@ async def api_update_course(course_id: str, body: CourseUpdate, current_user: Cu
 @router.delete("/{course_id}")
 async def api_delete_course(course_id: str, current_user: CurrentUser):
     """Soft-delete a course."""
-    success = delete_course(course_id)
+    success = delete_course(course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return {"status": "ok"}
@@ -103,7 +103,7 @@ class EnrollRequest(BaseModel):
 @router.post("/{course_id}/enroll")
 async def api_enroll_student(course_id: str, body: EnrollRequest, current_user: CurrentUser):
     """Enroll an existing student in this course."""
-    success = enroll_student(course_id, body.student_id)
+    success = enroll_student(course_id, body.student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -115,7 +115,7 @@ async def api_enroll_student(course_id: str, body: EnrollRequest, current_user: 
 @router.delete("/{course_id}/enroll/{student_id}")
 async def api_unenroll_student(course_id: str, student_id: str, current_user: CurrentUser):
     """Unenroll a student from this course."""
-    success = unenroll_student(course_id, student_id)
+    success = unenroll_student(course_id, student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

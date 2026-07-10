@@ -53,16 +53,16 @@ async def api_list_students(
 ):
     """Get all active students, optionally filtered by course or search query."""
     if search:
-        students = search_students(search)
+        students = search_students(search, telegram_id=current_user.telegram_id, role=current_user.role.value)
     else:
-        students = list_students(course_id)
+        students = list_students(telegram_id=current_user.telegram_id, role=current_user.role.value, course_id=course_id)
     return {"students": students}
 
 
 @router.get("/{student_id}")
 async def api_get_student(student_id: str, current_user: CurrentUser):
     """Get a student by ID."""
-    student = get_student(student_id)
+    student = get_student(student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return student
@@ -71,7 +71,7 @@ async def api_get_student(student_id: str, current_user: CurrentUser):
 @router.get("/{student_id}/profile")
 async def api_student_profile(student_id: str, current_user: CurrentUser):
     """Get full student profile with courses, attendance stats, payments, and achievements."""
-    profile = get_student_profile(student_id)
+    profile = get_student_profile(student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return profile
@@ -90,7 +90,7 @@ async def api_create_student(body: StudentCreate, admin: AdminOnly):
 async def api_update_student(student_id: str, body: StudentUpdate, admin: AdminOnly):
     """Update a student (admin only)."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
-    success = update_student(student_id, data)
+    success = update_student(student_id, data, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return {"status": "ok"}
@@ -99,7 +99,7 @@ async def api_update_student(student_id: str, body: StudentUpdate, admin: AdminO
 @router.delete("/{student_id}")
 async def api_delete_student(student_id: str, admin: AdminOnly):
     """Soft-delete a student (admin only)."""
-    success = delete_student(student_id)
+    success = delete_student(student_id, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return {"status": "ok"}

@@ -17,5 +17,5 @@ async def api_get_dashboard(current_user: CurrentUser):
     Returns today's courses with attendance stats,
     overall summary, and payment overview.
     """
-    dashboard = get_dashboard()
+    dashboard = get_dashboard(telegram_id=current_user.telegram_id, role=current_user.role.value)
     return dashboard

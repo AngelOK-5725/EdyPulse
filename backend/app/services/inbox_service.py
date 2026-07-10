@@ -6,7 +6,7 @@ so the inbox scales gracefully even with many students and courses.
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from backend.app.services.lesson_service import ensure_today_lessons, enrich_lesson_with_attendance
 from backend.app.services.course_service import list_courses
@@ -17,20 +17,20 @@ from backend.app.services.payment_service import list_payments
 logger = logging.getLogger(__name__)
 
 
-def get_inbox() -> dict[str, Any]:
+def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> dict[str, Any]:
     """Build the inbox — grouped by category so it scales."""
     today_str = date.today().isoformat()
     now = datetime.now()
     current_time = now.strftime("%H:%M")
 
-    courses = list_courses()
-    all_students = list_students()
-    all_payments = list_payments()
-    today_attendance = list_attendance(date=today_str)
-    today_lessons = ensure_today_lessons(courses)
+    courses = list_courses(telegram_id=telegram_id, role=role)
+    all_students = list_students(telegram_id=telegram_id, role=role)
+    all_payments = list_payments(telegram_id=telegram_id, role=role)
+    today_attendance = list_attendance(date=today_str, telegram_id=telegram_id, role=role)
+    today_lessons = ensure_today_lessons(courses, telegram_id=telegram_id)
 
     # Pre-load all attendance records grouped by student_id to avoid N+1
-    all_attendance = list_attendance()
+    all_attendance = list_attendance(telegram_id=telegram_id, role=role)
     student_attendance_map: dict[str, list[dict]] = {}
     for a in all_attendance:
         sid = a.get("student_id", "")

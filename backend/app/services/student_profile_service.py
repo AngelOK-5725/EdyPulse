@@ -13,28 +13,28 @@ from backend.app.services.achievement_service import list_achievements
 logger = logging.getLogger(__name__)
 
 
-def get_student_profile(student_id: str) -> Optional[dict[str, Any]]:
+def get_student_profile(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict[str, Any]]:
     """Get full student profile: info, courses, attendance stats, payments, achievements.
 
     Returns None if the student is not found.
     """
-    student = get_student(student_id)
+    student = get_student(student_id, telegram_id, role)
     if not student:
         return None
 
     # ── Courses the student is enrolled in ─────────────────────────────────
     enrolled_course_ids = _parse_ids(student.get("course_ids", ""))
-    all_courses = list_courses()
+    all_courses = list_courses(telegram_id=telegram_id, role=role)
     enrolled_courses = [c for c in all_courses if c.get("id") in enrolled_course_ids]
 
     # ── Payments — simple journal, no balance calculations ────────────────
-    payments = get_student_payments(student_id)
+    payments = get_student_payments(student_id, telegram_id, role)
 
     # ── Achievements ───────────────────────────────────────────────────────
-    achievements = list_achievements(student_id)
+    achievements = list_achievements(student_id, telegram_id, role)
 
     # ── Attendance ─────────────────────────────────────────────────────────
-    attendance_records = get_student_attendance(student_id)
+    attendance_records = get_student_attendance(student_id, telegram_id, role)
     attendance = _attendance_stats(attendance_records)
 
     total_paid = sum(float(p.get("amount", 0)) for p in payments)

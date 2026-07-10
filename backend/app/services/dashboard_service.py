@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Optional
 
 from backend.app.services.course_service import list_courses
 from backend.app.services.student_service import list_students
@@ -13,16 +13,16 @@ from backend.app.services.payment_service import list_payments
 logger = logging.getLogger(__name__)
 
 
-def get_dashboard() -> dict[str, Any]:
+def get_dashboard(telegram_id: Optional[int] = None, role: Optional[str] = None) -> dict[str, Any]:
     """Build the full dashboard response centered on today's lessons."""
     today_str = date.today().isoformat()
-    courses = list_courses()
-    all_students = list_students()
-    all_payments = list_payments()
+    courses = list_courses(telegram_id=telegram_id, role=role)
+    all_students = list_students(telegram_id=telegram_id, role=role)
+    all_payments = list_payments(telegram_id=telegram_id, role=role)
 
     # ── Today's lessons (auto-created) ─────────────────────────────────────
-    today_lessons = ensure_today_lessons(courses)
-    today_attendance = list_attendance(date=today_str)
+    today_lessons = ensure_today_lessons(courses, telegram_id=telegram_id)
+    today_attendance = list_attendance(date=today_str, telegram_id=telegram_id, role=role)
 
     lessons_with_stats = [
         enrich_lesson_with_attendance(l, all_students, today_attendance)

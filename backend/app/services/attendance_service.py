@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import ATTENDANCE_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -31,11 +33,21 @@ def _get_memory_store():
     return _memory_store
 
 
-def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None) -> list[dict]:
-    """Get attendance records, optionally filtered by course and/or date."""
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
+def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None,
+                    telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get attendance records, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         records = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            records = _user_filter(records, user_id)
         if course_id:
             records = [r for r in records if r.get("course_id", "") == course_id]
         if date:
@@ -46,11 +58,15 @@ def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None)
         return []
 
 
-def get_student_attendance(student_id: str) -> list[dict]:
-    """Get all attendance records for a student."""
+def get_student_attendance(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get attendance records for a student. Filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
-        return repo.find(student_id=student_id)
+        records = repo.find(student_id=student_id)
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            records = _user_filter(records, user_id)
+        return records
     except Exception as e:
         logger.error(f"Failed to get attendance for student {student_id}: {e}")
         return []
@@ -112,8 +128,7 @@ def mark_attendance(data: dict, telegram_id: Optional[int] = None) -> Optional[d
     }
     # Record the owner if we have a telegram_id
     if telegram_id is not None:
-        from backend.app.services.user_service import _resolve_user_id
-        owner_id = _resolve_user_id(telegram_id)
+        owner_id = get_internal_user_id(telegram_id)
         if owner_id:
             record["user_id"] = owner_id
     try:
@@ -123,22 +138,33 @@ def mark_attendance(data: dict, telegram_id: Optional[int] = None) -> Optional[d
         return None
 
 
-def update_attendance(attendance_id: str, data: dict) -> bool:
-    """Update an attendance record. Never allows changing the owner (user_id)."""
+def update_attendance(attendance_id: str, data: dict, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Update an attendance record. Checks ownership and never allows changing the owner (user_id)."""
     data.pop("user_id", None)
     repo = _get_repo()
     try:
+        existing = repo.get_by_id(attendance_id)
+        if not existing:
+            return False
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if not user_id or existing.get("user_id", "") not in ("", user_id):
+                return False
         return repo.update(attendance_id, data)
     except Exception as e:
         logger.error(f"Failed to update attendance {attendance_id}: {e}")
         return False
 
 
-def list_attendance_by_lesson(lesson_id: str) -> list[dict]:
-    """Get all attendance records for a lesson."""
+def list_attendance_by_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get attendance records for a lesson. Filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
-        return repo.find(lesson_id=lesson_id)
+        records = repo.find(lesson_id=lesson_id)
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            records = _user_filter(records, user_id)
+        return records
     except Exception as e:
         logger.error(f"Failed to get attendance for lesson {lesson_id}: {e}")
         return []

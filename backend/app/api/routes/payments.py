@@ -33,14 +33,14 @@ class PaymentUpdate(BaseModel):
 @router.get("")
 async def api_list_payments(current_user: CurrentUser):
     """Get all payment records (sorted by date descending)."""
-    payments = list_payments()
+    payments = list_payments(telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"payments": payments}
 
 
 @router.get("/student/{student_id}")
 async def api_student_payments(student_id: str, current_user: CurrentUser):
     """Get all payments for a specific student."""
-    payments = get_student_payments(student_id)
+    payments = get_student_payments(student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"payments": payments}
 
 
@@ -64,7 +64,7 @@ async def api_create_payment(body: PaymentCreate, admin: AdminOnly):
 async def api_update_payment(payment_id: str, body: PaymentUpdate, admin: AdminOnly):
     """Update a payment record (admin only)."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
-    success = update_payment(payment_id, data)
+    success = update_payment(payment_id, data, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
     return {"status": "ok"}

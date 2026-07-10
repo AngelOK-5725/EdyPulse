@@ -5,6 +5,8 @@ from datetime import datetime, date, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +33,20 @@ def _get_memory_store():
     return _memory_store
 
 
-def list_payments() -> list[dict]:
-    """Get all payment records (sorted by date descending)."""
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
+def list_payments(telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get all payment records, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         records = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            records = _user_filter(records, user_id)
         records.sort(key=lambda p: p.get("payment_date", ""), reverse=True)
         return records
     except Exception as e:
@@ -43,11 +54,14 @@ def list_payments() -> list[dict]:
         return []
 
 
-def get_student_payments(student_id: str) -> list[dict]:
-    """Get all payments for a student (sorted by date descending)."""
+def get_student_payments(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
+    """Get all payments for a student. Filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         records = repo.find(student_id=student_id)
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            records = _user_filter(records, user_id)
         records.sort(key=lambda p: p.get("payment_date", ""), reverse=True)
         return records
     except Exception as e:
@@ -75,8 +89,7 @@ def create_payment(data: dict, telegram_id: Optional[int] = None) -> Optional[di
     }
     # Record the owner if we have a telegram_id
     if telegram_id is not None:
-        from backend.app.services.user_service import _resolve_user_id
-        owner_id = _resolve_user_id(telegram_id)
+        owner_id = get_internal_user_id(telegram_id)
         if owner_id:
             record["user_id"] = owner_id
     try:
@@ -86,11 +99,18 @@ def create_payment(data: dict, telegram_id: Optional[int] = None) -> Optional[di
         return None
 
 
-def update_payment(payment_id: str, data: dict) -> bool:
-    """Update a payment record. Never allows changing the owner (user_id)."""
+def update_payment(payment_id: str, data: dict, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Update a payment record. Checks ownership and never allows changing the owner (user_id)."""
     data.pop("user_id", None)
     repo = _get_repo()
     try:
+        existing = repo.get_by_id(payment_id)
+        if not existing:
+            return False
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if not user_id or existing.get("user_id", "") not in ("", user_id):
+                return False
         return repo.update(payment_id, data)
     except Exception as e:
         logger.error(f"Failed to update payment {payment_id}: {e}")

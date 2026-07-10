@@ -19,10 +19,11 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 @router.get("/stats")
 async def api_system_stats(owner: OwnerOnly):
     """Get global system statistics (owner only)."""
-    courses = list_courses()
-    students = list_students()
-    all_attendance = list_attendance()
-    payments = list_payments()
+    # Owner sees all data (no user_id filter)
+    courses = list_courses(telegram_id=owner.telegram_id, role=owner.role.value)
+    students = list_students(telegram_id=owner.telegram_id, role=owner.role.value)
+    all_attendance = list_attendance(telegram_id=owner.telegram_id, role=owner.role.value)
+    payments = list_payments(telegram_id=owner.telegram_id, role=owner.role.value)
 
     # Users
     users_repo = _get_users_repo()
