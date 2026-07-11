@@ -237,7 +237,7 @@ class AuthUser:
 
 async def get_current_user(
     authorization: Optional[str] = Header(None),
-    request: Optional[Request] = None,
+    request: Request = None,
 ) -> AuthUser:
     """FastAPI dependency: extract current user from JWT in Authorization header.
 
