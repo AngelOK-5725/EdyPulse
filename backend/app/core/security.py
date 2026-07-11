@@ -10,7 +10,7 @@ from typing import Annotated, Optional
 from urllib.parse import unquote
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from jwt.exceptions import PyJWTError
 
 from backend.app.core.config import settings
@@ -47,6 +47,14 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
     Returns the parsed data dict with DECODED values if valid, None otherwise.
     """
     bot_token = settings.TELEGRAM_BOT_TOKEN
+
+    # ── TRACE: raw init_data before any parsing ─────────────────────────────
+    logger.info(
+        "VALIDATE_TRACE: validate_telegram_init_data() called — "
+        f"init_data length={len(init_data) if init_data else 0} | "
+        f"init_data[:200]={init_data[:200]!r}..."
+    )
+
     if not bot_token:
         logger.warning("TELEGRAM_BOT_TOKEN not configured — skipping validation")
         if not init_data:
@@ -55,19 +63,48 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
         raw = _parse_raw_pairs(init_data)
         return {k: unquote(v) for k, v in raw.items()}
 
+    # ── TRACE: bot_token preview ────────────────────────────────────────────
+    logger.info(
+        "VALIDATE_TRACE: TELEGRAM_BOT_TOKEN — "
+        f"bot_token[:10]={bot_token[:10]!r} | "
+        f"bot_token length={len(bot_token)}"
+    )
+
     if not init_data:
         return None
 
     try:
         raw_pairs = _parse_raw_pairs(init_data)
+
+        # ── TRACE: all keys after _parse_raw_pairs ─────────────────────────
+        logger.info(
+            "VALIDATE_TRACE: raw keys after _parse_raw_pairs() — "
+            f"sorted(raw_pairs.keys())={sorted(raw_pairs.keys())}"
+        )
+
+        # ── TRACE: does "signature" exist? ──────────────────────────────────
+        logger.info(
+            "VALIDATE_TRACE: signature field check — "
+            f"'signature' in raw_pairs={('signature' in raw_pairs)} | "
+            f"raw_pairs.get('signature')={raw_pairs.get('signature', 'NOT_FOUND')!r}"
+        )
+
         received_hash = raw_pairs.pop("hash", None)
 
         if not received_hash:
+            logger.warning("VALIDATE_TRACE: no 'hash' field in raw_pairs — aborting")
             return None
 
         # Build data-check string from RAW values (no URL decoding!)
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(raw_pairs.items())
+        )
+
+        # ── TRACE: data_check_string ────────────────────────────────────────
+        logger.info(
+            "VALIDATE_TRACE: data_check_string — "
+            f"length={len(data_check_string)} | "
+            f"content={data_check_string!r}"
         )
 
         # HMAC-SHA256 with "WebAppData" as key, then bot_token
@@ -78,6 +115,14 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
         computed_hash = hmac.new(
             secret_key, data_check_string.encode(), hashlib.sha256
         ).hexdigest()
+
+        # ── TRACE: hash comparison ──────────────────────────────────────────
+        logger.info(
+            "VALIDATE_TRACE: hash comparison — "
+            f"received_hash={received_hash!r} | "
+            f"computed_hash={computed_hash!r} | "
+            f"match={computed_hash == received_hash}"
+        )
 
         if computed_hash != received_hash:
             logger.warning("Telegram init data hash mismatch")
@@ -192,6 +237,7 @@ class AuthUser:
 
 async def get_current_user(
     authorization: Optional[str] = Header(None),
+    request: Optional[Request] = None,
 ) -> AuthUser:
     """FastAPI dependency: extract current user from JWT in Authorization header.
 
@@ -199,8 +245,56 @@ async def get_current_user(
     When DEBUG=True and no auth header is provided, returns a default admin user
     for local development without Telegram.
     """
+    # ── TRACE: Authorization header check ────────────────────────────────────
+    endpoint_path = request.url.path if request else "unknown"
+    http_method = request.method if request else "unknown"
+
+    if authorization is None:
+        logger.info(
+            f"AUTH_TRACE: get_current_user() called — "
+            f"Authorization header = None | "
+            f"endpoint={http_method} {endpoint_path} | "
+            f"request origin={request.headers.get('origin', 'N/A') if request else 'N/A'} | "
+            f"referer={request.headers.get('referer', 'N/A') if request else 'N/A'} | "
+            f"user-agent={request.headers.get('user-agent', 'N/A') if request else 'N/A'}"
+        )
+    elif authorization == "":
+        logger.info(
+            f"AUTH_TRACE: get_current_user() called — "
+            f"Authorization header = EMPTY STRING '' | "
+            f"endpoint={http_method} {endpoint_path} | "
+            f"origin={request.headers.get('origin', 'N/A') if request else 'N/A'}"
+        )
+    else:
+        token_preview = authorization[:20] + "..." if len(authorization) > 20 else authorization
+        logger.info(
+            f"AUTH_TRACE: get_current_user() called — "
+            f"Authorization header PRESENT | "
+            f"first 20 chars: {token_preview!r} | "
+            f"endpoint={http_method} {endpoint_path}"
+        )
+
+    # ── Detect OPTIONS/preflight ─────────────────────────────────────────────
+    if request and request.method == "OPTIONS":
+        logger.info(
+            f"AUTH_TRACE: OPTIONS preflight detected — "
+            f"endpoint={endpoint_path} | "
+            f"origin={request.headers.get('origin', 'N/A')}"
+        )
+        # CORSMiddleware should handle OPTIONS before reaching here,
+        # but if it arrives, we still process it
+
     if not authorization:
         if settings.DEBUG:
+            logger.warning(
+                f"AUTH_TRACE: >>> ENTERING DEBUG FALLBACK <<< | "
+                f"No Authorization header and DEBUG=True | "
+                f"Method={http_method} | URL={endpoint_path} | "
+                f"Origin={request.headers.get('origin', 'N/A') if request else 'N/A'} | "
+                f"Referer={request.headers.get('referer', 'N/A') if request else 'N/A'} | "
+                f"User-Agent={request.headers.get('user-agent', 'N/A') if request else 'N/A'} | "
+                f"All request headers: {dict(request.headers) if request else 'N/A'}"
+            )
             # Dev mode: allow requests without auth
             return AuthUser(telegram_id=0, role=UserRole.ADMIN)
         raise HTTPException(
@@ -210,6 +304,11 @@ async def get_current_user(
 
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
+        logger.warning(
+            f"AUTH_TRACE: Invalid Authorization scheme — "
+            f"scheme={scheme!r} | token empty={not token} | "
+            f"endpoint={http_method} {endpoint_path}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Authorization header format. Use: Bearer <token>",
@@ -217,17 +316,35 @@ async def get_current_user(
 
     payload = decode_access_token(token)
     if payload is None:
+        logger.warning(
+            f"AUTH_TRACE: JWT decode FAILED — "
+            f"token preview={token[:20] + '...' if len(token) > 20 else token!r} | "
+            f"endpoint={http_method} {endpoint_path}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
 
+    # JWT decode SUCCESS — log payload
     telegram_id = int(payload.get("sub", "0"))
     role_str = payload.get("role", "user")
+    exp_ts = payload.get("exp", 0)
+    exp_str = datetime.fromtimestamp(exp_ts, tz=timezone.utc).isoformat() if exp_ts else "unknown"
+    now_ts = int(time.time())
+    is_expired = now_ts > exp_ts if exp_ts else False
+
+    logger.info(
+        f"AUTH_TRACE: JWT decode SUCCESS — "
+        f"sub(telegram_id)={telegram_id} | role={role_str} | "
+        f"expires={exp_str} | expired={is_expired} | "
+        f"endpoint={http_method} {endpoint_path}"
+    )
 
     try:
         role = UserRole(role_str)
     except ValueError:
+        logger.warning(f"AUTH_TRACE: Unknown role string {role_str!r}, falling back to USER")
         role = UserRole.USER
 
     return AuthUser(telegram_id=telegram_id, role=role)
