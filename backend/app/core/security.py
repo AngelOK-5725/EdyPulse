@@ -25,16 +25,38 @@ logger = logging.getLogger(__name__)
 def _parse_raw_pairs(init_data: str) -> dict[str, str]:
     """Parse initData into raw key=value pairs WITHOUT URL-decoding.
 
+    DIAGNOSTIC VERIFICATION (this function does NOT):
+      - call unquote()
+      - call parse_qs()
+      - replace '+' with space
+      - modify %2F or any other percent-encoding
+      - sort fields
+      - remove any characters from values
+
     The HMAC validation must use the raw (URL-encoded) values as-is,
     because Telegram computes the hash over the original query string,
     not the decoded values.
     """
     result = {}
-    for pair in init_data.split("&"):
+
+    # ── DIAG: show each raw part immediately after split('&'), before ANY parsing ──
+    raw_parts = init_data.split("&")
+    logger.info("DIAG_PARSE: _parse_raw_pairs() called — split('&') produced %d part(s)", len(raw_parts))
+    for i, part in enumerate(raw_parts):
+        logger.info("DIAG_PARSE:   RAW PART[%d]: %s", i, part)  # plain string, no repr — show exactly what split gives
+
+    for pair in raw_parts:
         if "=" not in pair:
+            logger.info("DIAG_PARSE:   SKIP (no '='): %s", pair)
             continue
         key, value = pair.split("=", 1)
+        # ── DIAG: show every key with repr(value) and len(value) ────────────
+        logger.info(
+            "DIAG_PARSE: key=%r | repr(value)=%r | len=%d",
+            key, value, len(value)
+        )
         result[key] = value  # Keep raw — no unquote!
+
     return result
 
 
@@ -82,6 +104,13 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             f"sorted(raw_pairs.keys())={sorted(raw_pairs.keys())}"
         )
 
+        # ── DIAG: repr of every value returned by _parse_raw_pairs ─────────
+        for k, v in sorted(raw_pairs.items()):
+            logger.info(
+                "DIAG_PARSE_POST: key=%r | repr(value)=%r | len=%d",
+                k, v, len(v)
+            )
+
         # ── TRACE: does "signature" exist? ──────────────────────────────────
         logger.info(
             "VALIDATE_TRACE: signature field check — "
@@ -105,6 +134,12 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             "VALIDATE_TRACE: data_check_string — "
             f"length={len(data_check_string)} | "
             f"content={data_check_string!r}"
+        )
+        # ── DIAG: repr(data_check_string) — show ALL hidden characters ─────
+        # Need to see \n, \r, %, spaces, and any invisible changes
+        logger.info(
+            "DIAG_PARSE: repr(data_check_string)=\n%s",
+            repr(data_check_string)
         )
 
         # HMAC-SHA256 with "WebAppData" as key, then bot_token
