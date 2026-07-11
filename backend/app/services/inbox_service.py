@@ -266,13 +266,14 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
     # ── BUILD GROUPS (only non-empty groups, plus actions) ─────────────────
     groups: list[dict[str, Any]] = []
 
-    if lesson_items:
-        groups.append({
-            "key": "lessons",
-            "label": "Занятия",
-            "icon": "📚",
-            "items": lesson_items,
-        })
+    # Lessons group is ALWAYS shown, even when empty — gives the teacher
+    # a consistent anchor point. Empty state is handled on the frontend.
+    groups.append({
+        "key": "lessons",
+        "label": "Занятия",
+        "icon": "📚",
+        "items": lesson_items,
+    })
     if payment_items:
         groups.append({
             "key": "payments",

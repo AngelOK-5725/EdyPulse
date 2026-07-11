@@ -313,11 +313,19 @@ export default function InboxPage() {
 
               {!isCollapsed && (
                 <div className="space-y-1.5 pl-2 animate-slide-up">
-                  {group.items.map((item) => (
-                    isLessonGroup
-                      ? <LessonCard key={item.id} item={item} />
-                      : <InboxCard key={item.id} item={item} />
-                  ))}
+                  {group.items.length === 0 && isLessonGroup ? (
+                    <div className="rounded-xl bg-white border border-dashed border-gray-200 p-6 text-center">
+                      <div className="text-3xl mb-2">📅</div>
+                      <p className="text-sm font-medium text-gray-700 mb-1">Сегодня занятий нет</p>
+                      <p className="text-[11px] text-gray-400">Следующее занятие появится здесь автоматически.</p>
+                    </div>
+                  ) : (
+                    group.items.map((item) => (
+                      isLessonGroup
+                        ? <LessonCard key={item.id} item={item} />
+                        : <InboxCard key={item.id} item={item} />
+                    ))
+                  )}
                 </div>
               )}
             </div>
