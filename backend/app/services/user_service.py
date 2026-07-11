@@ -132,7 +132,10 @@ def get_internal_user_id(telegram_id: int) -> Optional[str]:
     """
     user = get_user_by_telegram_id(telegram_id)
     if user:
-        return str(user.get("id", ""))
+        result = str(user.get("id", ""))
+        logger.info(f"TRACE_DASHBOARD get_internal_user_id(telegram_id={telegram_id}) → id={result!r}")
+        return result
+    logger.info(f"TRACE_DASHBOARD get_internal_user_id(telegram_id={telegram_id}) → None (user not found)")
     return None
 
 

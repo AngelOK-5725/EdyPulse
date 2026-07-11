@@ -202,19 +202,30 @@ def ensure_today_lessons(courses: list[dict], telegram_id: Optional[int] = None)
     }
     today_weekday = weekday_map[date.today().weekday()]
 
+    logger.info(f"TRACE_DASHBOARD ensure_today_lessons() — courses={len(courses)}, today={today_str}, weekday={today_weekday}")
+
     lessons = []
     for course in courses:
         days_str = course.get("days", "")
+        course_id = course.get("id", "?")
+        course_title = course.get("title", "?")
         if not days_str:
+            logger.info(f"TRACE_DASHBOARD   course {course_id} '{course_title}' — no days, skip")
             continue
         days = [d.strip() for d in days_str.split(",")]
-        if today_weekday not in days:
+        matches = today_weekday in days
+        logger.info(f"TRACE_DASHBOARD   course {course_id} '{course_title}' — days={days}, today={today_weekday}, matches={matches}")
+        if not matches:
             continue
 
         lesson = ensure_lesson_for_course(course, today_str, telegram_id=telegram_id)
         if lesson:
             lessons.append(lesson)
+            logger.info(f"TRACE_DASHBOARD     → lesson created: {lesson.get('id')}")
+        else:
+            logger.info(f"TRACE_DASHBOARD     → lesson creation FAILED")
 
+    logger.info(f"TRACE_DASHBOARD ensure_today_lessons() — total lessons created: {len(lessons)}")
     return lessons
 
 

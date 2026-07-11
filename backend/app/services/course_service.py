@@ -45,10 +45,22 @@ def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) 
     repo = _get_repo()
     try:
         courses = repo.get_all()
+        logger.info(f"TRACE_DASHBOARD list_courses() — role={role!r}, courses BEFORE filter: {len(courses)}")
+        for c in courses:
+            logger.info(f"TRACE_DASHBOARD   course id={c.get('id','')!r}, user_id={c.get('user_id','')!r}, "
+                        f"title={c.get('title','')!r}, days={c.get('days','')!r}")
+
         if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
+            logger.info(f"TRACE_DASHBOARD list_courses() — applying _user_filter with user_id={user_id!r}")
             courses = _user_filter(courses, user_id)
-        return [c for c in courses if c.get("is_active", "true") == "true"]
+            logger.info(f"TRACE_DASHBOARD list_courses() — courses AFTER _user_filter: {len(courses)}")
+        else:
+            logger.info(f"TRACE_DASHBOARD list_courses() — SKIP _user_filter (is_owner={is_owner_role(role or '')})")
+
+        active = [c for c in courses if c.get("is_active", "true") == "true"]
+        logger.info(f"TRACE_DASHBOARD list_courses() — final active courses: {len(active)}")
+        return active
     except Exception as e:
         logger.error(f"Failed to list courses: {e}")
         return []

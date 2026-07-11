@@ -16,12 +16,19 @@ logger = logging.getLogger(__name__)
 def get_dashboard(telegram_id: Optional[int] = None, role: Optional[str] = None) -> dict[str, Any]:
     """Build the full dashboard response centered on today's lessons."""
     today_str = date.today().isoformat()
+    today_weekday = date.today().weekday()
+    weekday_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    logger.info(f"TRACE_DASHBOARD get_dashboard() — telegram_id={telegram_id}, role={role!r}, "
+                f"date={today_str}, weekday={today_weekday}({weekday_names[today_weekday]})")
+
     courses = list_courses(telegram_id=telegram_id, role=role)
+    logger.info(f"TRACE_DASHBOARD get_dashboard() — courses from list_courses: {len(courses)}")
     all_students = list_students(telegram_id=telegram_id, role=role)
     all_payments = list_payments(telegram_id=telegram_id, role=role)
 
     # ── Today's lessons (auto-created) ─────────────────────────────────────
     today_lessons = ensure_today_lessons(courses, telegram_id=telegram_id)
+    logger.info(f"TRACE_DASHBOARD get_dashboard() — today_lessons from ensure_today_lessons: {len(today_lessons)}")
     today_attendance = list_attendance(date=today_str, telegram_id=telegram_id, role=role)
 
     lessons_with_stats = [
@@ -85,6 +92,15 @@ def get_dashboard(telegram_id: Optional[int] = None, role: Optional[str] = None)
     # ── Summary ────────────────────────────────────────────────────────────
     all_active = [s for s in all_students if s.get("is_active", "true") == "true"]
     unique_students = set(s.get("id") for s in all_active)
+
+    logger.info(
+        f"TRACE_DASHBOARD get_dashboard() — RESPONSE: "
+        f"today_lessons={len(today_lessons)}, "
+        f"next_lesson={'yes' if next_lesson else 'no'}, "
+        f"total_students={len(all_today_students)}, "
+        f"courses={len(courses)}, "
+        f"unique_students={len(unique_students)}"
+    )
 
     return {
         "today": {
