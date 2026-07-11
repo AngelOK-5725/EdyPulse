@@ -8,19 +8,13 @@ const PRIORITY_STYLES: Record<string, { dot: string; bg: string; border: string;
   low: { dot: 'bg-gray-300', bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-500' },
 };
 
-const GROUP_HEADER_STYLES: Record<string, string> = {
-  lessons: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
-  payments: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
-  trials: 'bg-gradient-to-r from-purple-500 to-purple-600',
-  attention: 'bg-gradient-to-r from-amber-500 to-orange-500',
-  actions: 'bg-gradient-to-r from-gray-400 to-gray-500',
-};
-
 function formatWeekday(dateStr: string): string {
   const d = new Date(dateStr);
   const weekdays = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
   return weekdays[d.getDay()];
 }
+
+// ─── Group Header ─────────────────────────────────────────────────────────
 
 function GroupHeader({ group, collapsed, onToggle }: {
   group: InboxGroup;
@@ -34,9 +28,10 @@ function GroupHeader({ group, collapsed, onToggle }: {
       onClick={onToggle}
       className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-white shadow-sm transition-all duration-200 active:scale-[0.98]"
       style={{ backgroundColor: 'var(--tg-theme-button-color)' }}
-    >        <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg shrink-0">
-          {group.icon}
-        </div>
+    >
+      <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg shrink-0">
+        {group.icon}
+      </div>
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">{group.label}</span>
@@ -59,6 +54,91 @@ function GroupHeader({ group, collapsed, onToggle }: {
     </button>
   );
 }
+
+// ─── Lesson Card (rich lesson display) ───────────────────────────────────
+
+function LessonCard({ item }: { item: InboxItem }) {
+  const navigate = useNavigate();
+  const color = item.color || '#6C5CE7';
+  const isHigh = item.priority === 'high';
+  const isCurrent = item.lesson_status === 'current';
+  const isPast = item.lesson_status === 'past';
+
+  return (
+    <button
+      onClick={() => navigate(item.action_url)}
+      className="w-full text-left transition-all duration-150 active:scale-[0.97] group"
+    >
+      <div className="rounded-xl bg-white border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+        {/* Color accent bar */}
+        <div className="h-1.5" style={{ backgroundColor: color }} />
+
+        <div className="p-4">
+          {/* Top row: time + time_until badge */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold" style={{ color }}>
+                {item.lesson_time || ''}
+              </span>
+              <span className="text-sm font-semibold text-gray-800">
+                {item.title.replace(item.lesson_time || '', '').trim() || item.title}
+              </span>
+            </div>
+
+            {/* Time-until badge */}
+            {item.time_until && (
+              <div className={`
+                shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold
+                ${isCurrent
+                  ? 'bg-green-100 text-green-700 animate-pulse'
+                  : isPast
+                    ? 'bg-gray-100 text-gray-400'
+                    : 'bg-indigo-100 text-indigo-700'
+                }
+              `}>
+                {isCurrent ? '🔴 ' : ''}{item.time_until}
+              </div>
+            )}
+          </div>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-4 text-[12px] text-gray-500 mb-3">
+            {item.student_count !== undefined && (
+              <span className="flex items-center gap-1">
+                <span>👥</span>
+                <span>{item.student_count} {item.student_count === 1 ? 'ученик' : 'учеников'}</span>
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              {isHigh ? '🔴' : isCurrent ? '🟡' : '🟢'}
+              <span>{item.subtitle}</span>
+            </span>
+          </div>
+
+          {/* Action button */}
+          <div
+            className={`
+              w-full py-2 rounded-xl text-[12px] font-semibold text-center transition-all duration-150
+              ${isHigh
+                ? 'text-white shadow-sm'
+                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+              }
+              group-hover:opacity-90
+            `}
+            style={isHigh ? { backgroundColor: color } : {}}
+          >
+            {item.action_label}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="inline ml-1 -mt-0.5">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ─── Inbox Card (generic for non-lesson groups) ──────────────────────────
 
 function InboxCard({ item }: { item: InboxItem }) {
   const navigate = useNavigate();
@@ -114,6 +194,8 @@ function InboxCard({ item }: { item: InboxItem }) {
     </button>
   );
 }
+
+// ─── Main Page ────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -219,6 +301,7 @@ export default function InboxPage() {
       <div className="space-y-3">
         {inbox.groups.map((group) => {
           const isCollapsed = collapsedGroups[group.key] ?? false;
+          const isLessonGroup = group.key === 'lessons';
 
           return (
             <div key={group.key} className="space-y-1.5">
@@ -231,7 +314,9 @@ export default function InboxPage() {
               {!isCollapsed && (
                 <div className="space-y-1.5 pl-2 animate-slide-up">
                   {group.items.map((item) => (
-                    <InboxCard key={item.id} item={item} />
+                    isLessonGroup
+                      ? <LessonCard key={item.id} item={item} />
+                      : <InboxCard key={item.id} item={item} />
                   ))}
                 </div>
               )}

@@ -201,6 +201,12 @@ export interface InboxItem {
   action_url: string;
   student_id?: string;
   lesson_id?: string;
+  // Lesson-specific fields
+  lesson_time?: string;
+  student_count?: number;
+  color?: string;
+  time_until?: string;
+  lesson_status?: 'upcoming' | 'current' | 'past';
 }
 
 export interface InboxGroup {

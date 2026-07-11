@@ -50,7 +50,11 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
         unmarked = stats.get("unmarked", 0)
         lesson_time = lesson.get("time", "")
 
-        # Determine priority
+        # Student count
+        student_count = enriched.get("student_count", 0)
+        color = enriched.get("color", "#6C5CE7")
+
+        # Determine priority and status
         if unmarked > 0:
             if lesson_time and lesson_time <= current_time:
                 priority = "high"
@@ -58,6 +62,34 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
                 priority = "medium"
         else:
             priority = "low"
+
+        # Time until lesson (human-readable)
+        time_until = ""
+        lesson_status = "upcoming"
+        if lesson_time:
+            try:
+                lesson_h, lesson_m = lesson_time.split(":")
+                lesson_minutes = int(lesson_h) * 60 + int(lesson_m)
+                now_h, now_m = now.strftime("%H:%M").split(":")
+                now_minutes = int(now_h) * 60 + int(now_m)
+                diff = lesson_minutes - now_minutes
+                if diff > 120:
+                    time_until = f"Через {diff // 60} ч {diff % 60} мин"
+                    lesson_status = "upcoming"
+                elif diff > 0:
+                    time_until = f"Через {diff} мин"
+                    lesson_status = "upcoming"
+                elif diff > -60:
+                    time_until = "Сейчас"
+                    lesson_status = "current"
+                elif diff > -120:
+                    time_until = f"Прошло {abs(diff)} мин"
+                    lesson_status = "past"
+                else:
+                    time_until = f"Прошло {abs(diff) // 60} ч"
+                    lesson_status = "past"
+            except (ValueError, ZeroDivisionError):
+                pass
 
         trial_count = stats.get("trial", 0)
         title = lesson.get("title", "Занятие")
@@ -83,6 +115,12 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
             "action_label": action_label,
             "action_url": f"/lesson/{lesson.get('id', '')}",
             "lesson_id": lesson.get("id", ""),
+            # Rich lesson data
+            "lesson_time": lesson_time,
+            "student_count": student_count,
+            "color": color,
+            "time_until": time_until,
+            "lesson_status": lesson_status,
         })
 
     # ── 2. TRIAL STUDENTS ─────────────────────────────────────────────────
