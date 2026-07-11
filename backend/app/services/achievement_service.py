@@ -5,8 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.models.user import UserRole
-from backend.app.services.user_service import get_internal_user_id, is_owner_role
+from backend.app.services.user_service import get_internal_user_id, is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +39,11 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_achievements(student_id: Optional[str] = None, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get achievements, filtered by user_id for non-OWNER users."""
+    """Get achievements, filtered by user_id for non-Admin+ users."""
     repo = _get_repo()
     try:
         records = repo.get_all()
-        if not is_owner_role(role or "") and telegram_id is not None:
+        if not is_admin_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         if student_id:
@@ -91,7 +90,7 @@ def delete_achievement(achievement_id: str, telegram_id: Optional[int] = None, r
         existing = repo.get_by_id(achievement_id)
         if not existing:
             return False
-        if not is_owner_role(role or "") and telegram_id is not None:
+        if not is_admin_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             if not user_id or existing.get("user_id", "") not in ("", user_id):
                 return False

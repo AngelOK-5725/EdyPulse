@@ -144,6 +144,15 @@ def is_owner_role(role: str) -> bool:
     return role == UserRole.OWNER.value
 
 
+def is_admin_role(role: str) -> bool:
+    """Check if a role string corresponds to admin or owner (Admin+).
+
+    Admin+ has full data access and can manage users.
+    Teacher (USER) is the only role with restricted data access.
+    """
+    return role in (UserRole.ADMIN.value, UserRole.OWNER.value)
+
+
 def update_user_role(telegram_id: int, new_role: str) -> bool:
     """Update a user's role (admin only)."""
     repo = _get_users_repo()

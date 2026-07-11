@@ -5,8 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.models.user import UserRole
-from backend.app.services.user_service import get_internal_user_id, is_owner_role
+from backend.app.services.user_service import get_internal_user_id, is_admin_role
 from sheets.repositories.headers import STUDENTS_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -41,11 +40,11 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_students(telegram_id: Optional[int] = None, role: Optional[str] = None, course_id: Optional[str] = None) -> list[dict]:
-    """Get active students, filtered by user_id for non-OWNER users."""
+    """Get active students, filtered by user_id for non-Admin+ users."""
     repo = _get_repo()
     try:
         students = repo.get_all()
-        if not is_owner_role(role or "") and telegram_id is not None:
+        if not is_admin_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
@@ -64,7 +63,7 @@ def get_student(student_id: str, telegram_id: Optional[int] = None, role: Option
         student = repo.get_by_id(student_id)
         if not student:
             return None
-        if is_owner_role(role or ""):
+        if is_admin_role(role or ""):
             return student
         if telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
@@ -164,7 +163,7 @@ def search_students(query: str, telegram_id: Optional[int] = None, role: Optiona
     repo = _get_repo()
     try:
         students = repo.get_all()
-        if not is_owner_role(role or "") and telegram_id is not None:
+        if not is_admin_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
