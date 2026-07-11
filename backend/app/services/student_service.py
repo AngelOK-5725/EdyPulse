@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
+from backend.app.models.user import UserRole
 from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import STUDENTS_HEADERS
 
@@ -32,11 +33,21 @@ def _get_memory_store():
     return _memory_store
 
 
+def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
+    """Filter records to only those accessible by a user: owned or legacy (user_id="")."""
+    if not user_id:
+        return records
+    return [r for r in records if r.get("user_id", "") in ("", user_id)]
+
+
 def list_students(telegram_id: Optional[int] = None, role: Optional[str] = None, course_id: Optional[str] = None) -> list[dict]:
-    """Get active students."""
+    """Get active students, filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         students = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
         if course_id:
             return [s for s in active if course_id in s.get("course_ids", "").split(",")]
@@ -149,10 +160,13 @@ def delete_student(student_id: str, telegram_id: Optional[int] = None, role: Opt
 
 
 def search_students(query: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Search active students by name."""
+    """Search active students by name. Filtered by user_id for non-OWNER users."""
     repo = _get_repo()
     try:
         students = repo.get_all()
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            students = _user_filter(students, user_id)
         active = [s for s in students if s.get("is_active", "true") == "true"]
         if not query:
             return active[:20]
