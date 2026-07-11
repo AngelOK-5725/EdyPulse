@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.models.user import UserRole
 from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import COURSES_HEADERS
 
@@ -33,21 +32,11 @@ def _get_memory_store():
     return _memory_store
 
 
-def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
-    """Filter records to only those accessible by a user: owned or legacy (user_id="")."""
-    if not user_id:
-        return records
-    return [r for r in records if r.get("user_id", "") in ("", user_id)]
-
-
 def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get active courses, filtered by user_id for non-OWNER users."""
+    """Get active courses."""
     repo = _get_repo()
     try:
         courses = repo.get_all()
-        if not is_owner_role(role or "") and telegram_id is not None:
-            user_id = get_internal_user_id(telegram_id)
-            courses = _user_filter(courses, user_id)
         return [c for c in courses if c.get("is_active", "true") == "true"]
     except Exception as e:
         logger.error(f"Failed to list courses: {e}")
