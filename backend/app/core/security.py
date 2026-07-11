@@ -116,12 +116,33 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             secret_key, data_check_string.encode(), hashlib.sha256
         ).hexdigest()
 
-        # ── TRACE: hash comparison ──────────────────────────────────────────
+        # ── TRACE: hash comparison (Вариант A — с signature) ────────────────
         logger.info(
-            "VALIDATE_TRACE: hash comparison — "
+            "VALIDATE_TRACE: hash comparison (A — with signature) — "
             f"received_hash={received_hash!r} | "
-            f"computed_hash={computed_hash!r} | "
+            f"computed_hash_with_signature={computed_hash!r} | "
             f"match={computed_hash == received_hash}"
+        )
+
+        # ── TRACE: Вариант B — исключаем и hash, и signature ──────────────────
+        # Строим data_check_string без полей hash и signature
+        pairs_without_hash_sig = {
+            k: v for k, v in raw_pairs.items()
+            if k not in ("hash", "signature")
+        }
+        data_check_string_no_sig = "\n".join(
+            f"{k}={v}" for k, v in sorted(pairs_without_hash_sig.items())
+        )
+        computed_hash_no_sig = hmac.new(
+            secret_key, data_check_string_no_sig.encode(), hashlib.sha256
+        ).hexdigest()
+
+        logger.info(
+            "VALIDATE_TRACE: hash comparison (B — without hash/signature) — "
+            f"received_hash={received_hash!r} | "
+            f"data_check_string_without_signature={data_check_string_no_sig!r} | "
+            f"computed_hash_without_signature={computed_hash_no_sig!r} | "
+            f"match={computed_hash_no_sig == received_hash}"
         )
 
         if computed_hash != received_hash:
