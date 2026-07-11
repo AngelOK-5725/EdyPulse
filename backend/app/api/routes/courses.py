@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
 
-from backend.app.core.security import CurrentUser
+from backend.app.core.security import CurrentUser, AdminOnly
 from backend.app.services.course_service import (
     list_courses, get_course, create_course, update_course, delete_course,
     enroll_student, unenroll_student,
@@ -88,9 +88,9 @@ async def api_update_course(course_id: str, body: CourseUpdate, current_user: Cu
 
 
 @router.delete("/{course_id}")
-async def api_delete_course(course_id: str, current_user: CurrentUser):
-    """Soft-delete a course."""
-    success = delete_course(course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+async def api_delete_course(course_id: str, admin: AdminOnly):
+    """Soft-delete a course (Admin, Owner)."""
+    success = delete_course(course_id, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return {"status": "ok"}

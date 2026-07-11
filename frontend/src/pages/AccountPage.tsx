@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function AccountPage() {
-  const { user, logout, isAdmin, isOwner } = useAuth();
+  const { user, logout, permissions } = useAuth();
   const navigate = useNavigate();
 
   // Получаем данные пользователя напрямую из Telegram Mini App
@@ -72,7 +72,7 @@ export default function AccountPage() {
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
-          {isAdmin && (
+          {permissions.canManageUsers && (
             <button onClick={() => navigate('/admin/courses')} className="w-full flex items-center justify-between py-3 px-2 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors">
               <span className="text-sm text-[var(--tg-theme-text-color)]">Управление курсами</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--tg-theme-hint-color)]">
@@ -80,7 +80,7 @@ export default function AccountPage() {
               </svg>
             </button>
           )}
-          {isAdmin && (
+          {permissions.canManageUsers && (
             <button onClick={() => navigate('/admin/students')} className="w-full flex items-center justify-between py-3 px-2 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors">
               <span className="text-sm text-[var(--tg-theme-text-color)]">Ученики</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--tg-theme-hint-color)]">
@@ -88,7 +88,7 @@ export default function AccountPage() {
               </svg>
             </button>
           )}
-          {isAdmin && (
+          {permissions.canManageUsers && (
             <button onClick={() => navigate('/admin/users')} className="w-full flex items-center justify-between py-3 px-2 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors">
               <span className="text-sm text-[var(--tg-theme-text-color)]">Пользователи и роли</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--tg-theme-hint-color)]">
@@ -96,7 +96,7 @@ export default function AccountPage() {
               </svg>
             </button>
           )}
-          {isOwner && (
+          {permissions.canOpenOwnerPanel && (
             <button onClick={() => navigate('/owner')} className="w-full flex items-center justify-between py-3 px-2 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors">
               <span className="text-sm font-medium text-purple-600">⚙️ Панель владельца</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--tg-theme-hint-color)]">

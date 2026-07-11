@@ -4,23 +4,23 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 export default function AdminPage() {
-  const { isAdmin, user } = useAuth();
+  const { permissions, user } = useAuth();
   const navigate = useNavigate();
   const [paymentsCount, setPaymentsCount] = useState(0);
   const [coursesCount, setCoursesCount] = useState(0);
   const [studentsCount, setStudentsCount] = useState(0);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!permissions.canManageUsers) {
       navigate('/');
       return;
     }
     api.getPayments().then(d => setPaymentsCount(d.payments.length)).catch(() => {});
     api.getCourses().then(d => setCoursesCount(d.courses.length)).catch(() => {});
     api.getStudents().then(d => setStudentsCount(d.students.length)).catch(() => {});
-  }, [isAdmin, navigate]);
+  }, [permissions.canManageUsers, navigate]);
 
-  if (!isAdmin) return null;
+  if (!permissions.canManageUsers) return null;
 
   const adminSections = [
     {

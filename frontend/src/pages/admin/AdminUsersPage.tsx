@@ -20,15 +20,15 @@ const ROLES = [
 ];
 
 export default function AdminUsersPage() {
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return; }
+    if (!permissions.canManageUsers) { navigate('/'); return; }
     loadUsers();
-  }, [isAdmin]);
+  }, [permissions.canManageUsers]);
 
   const loadUsers = async () => {
     try {

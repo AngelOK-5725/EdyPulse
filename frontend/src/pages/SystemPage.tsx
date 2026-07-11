@@ -5,14 +5,18 @@ import api, { type SystemStats } from '../services/api';
 
 export default function SystemPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!permissions.canOpenOwnerPanel) {
+      navigate('/', { replace: true });
+      return;
+    }
     loadStats();
-  }, []);
+  }, [permissions.canOpenOwnerPanel, navigate]);
 
   const loadStats = async () => {
     try {
@@ -27,6 +31,8 @@ export default function SystemPage() {
       setLoading(false);
     }
   };
+
+  if (!permissions.canOpenOwnerPanel) return null;
 
   if (loading) {
     return (

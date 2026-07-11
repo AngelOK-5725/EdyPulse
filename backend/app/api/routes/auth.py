@@ -157,10 +157,17 @@ async def list_users(admin: AdminOnly):
 
 @router.put("/admin/users/{telegram_id}/role")
 async def set_user_role(telegram_id: int, body: RoleUpdateRequest, admin: AdminOnly):
-    """Update a user's role (admin only).
+    """Update a user's role (admin or owner).
 
     Expects JSON body: { "role": "admin" | "tester" | "user" }
+    Only Owner can assign the 'owner' role.
     """
+    # Prevent non-owner from assigning the owner role
+    if not admin.is_owner() and body.role == UserRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the system owner can assign the owner role",
+        )
     success = update_user_role(telegram_id, body.role.value)
     if not success:
         raise HTTPException(

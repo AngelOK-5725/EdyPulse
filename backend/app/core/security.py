@@ -270,9 +270,13 @@ async def get_owner_user(
     return current_user
 
 
-# ─── Shorthand dependencies ─────────────────────────────────────────────────
+# ─── Shorthand dependencies (единая система проверки ролей) ────────────────
+#
+# TeacherOnly  — USER + ADMIN + OWNER (все, кто имеет доступ к ученикам)
+# AdminOnly    — ADMIN + OWNER
+# OwnerOnly    — только OWNER (проверка по Telegram ID)
+# CurrentUser  — любой аутентифицированный пользователь (базовый доступ)
 
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]
 AdminOnly = Annotated[AuthUser, Depends(require_role([UserRole.ADMIN, UserRole.OWNER]))]
-AdminOrTester = Annotated[AuthUser, Depends(require_role([UserRole.ADMIN, UserRole.TESTER, UserRole.OWNER]))]
 OwnerOnly = Annotated[AuthUser, Depends(get_owner_user)]

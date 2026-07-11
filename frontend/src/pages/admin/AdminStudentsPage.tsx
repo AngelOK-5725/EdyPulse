@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api, { type Student, type Course } from '../../services/api';
 
 export default function AdminStudentsPage() {
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -20,10 +20,10 @@ export default function AdminStudentsPage() {
   const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return; }
+    if (!permissions.canManageUsers) { navigate('/'); return; }
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [permissions.canManageUsers]);
 
   const loadData = async () => {
     try {

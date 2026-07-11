@@ -23,7 +23,7 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 export default function StudentCardPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -587,7 +587,7 @@ export default function StudentCardPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
           Назад
         </button>
-        {isAdmin && (
+        {permissions.canEditStudents && (
           <button onClick={startEditing} className="text-sm text-[var(--tg-theme-button-color)] flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--tg-theme-button-color)]/10 hover:bg-[var(--tg-theme-button-color)]/20 transition-all">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
             Редактировать
@@ -722,7 +722,7 @@ export default function StudentCardPage() {
         </div>
 
         {/* Add payment button */}
-        {isAdmin && courses.length > 0 && (
+        {permissions.canAddPayments && courses.length > 0 && (
           <button
             onClick={openPaymentModal}
             className="w-full py-3 rounded-2xl font-semibold text-sm transition-all active:scale-[0.98] tg-button"
@@ -952,14 +952,16 @@ export default function StudentCardPage() {
         </div>
       )}
 
-      {/* ── Admin: Archive & Delete buttons ─────────────────────────── */}
-      {isAdmin && (
-        <div className="space-y-2">
+      {/* ── Archive & Delete buttons ───────────────────────────────── */}
+      <div className="space-y-2">
+        {permissions.canArchiveStudents && (
           <button onClick={() => setShowArchiveModal(true)}
             className="w-full py-3 rounded-2xl border border-amber-200 text-amber-600 text-sm font-medium hover:bg-amber-50 transition-all active:scale-[0.98]"
           >
             📦 Архивировать
           </button>
+        )}
+        {permissions.canDeleteStudents && (
           <button
             onClick={async () => {
               if (!window.confirm(`Удалить ученика ${student.first_name} ${student.last_name}? Это действие нельзя отменить.`)) return;
@@ -972,8 +974,8 @@ export default function StudentCardPage() {
           >
             Удалить ученика
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

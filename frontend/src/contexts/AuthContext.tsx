@@ -12,6 +12,52 @@ export interface User {
   is_active: boolean;
 }
 
+// ─── Единая система семантических прав доступа ────────────────────────────
+// Матрица доступа:
+// Действие                     Teacher  Admin  Owner
+// Просмотр учеников              ✅      ✅     ✅
+// Просмотр карточки ученика      ✅      ✅     ✅
+// Добавление ученика             ✅      ✅     ✅
+// Редактирование ученика         ✅      ✅     ✅
+// Добавление платежа             ✅      ✅     ✅
+// Просмотр истории платежей      ✅      ✅     ✅
+// Архивирование ученика          ✅      ✅     ✅
+// Восстановление из архива       ✅      ✅     ✅
+// Удаление ученика навсегда      ❌      ❌     ✅
+// Управление пользователями      ❌      ✅     ✅
+// Панель Owner                   ❌      ❌     ✅
+
+export interface Permissions {
+  canViewStudents: boolean;
+  canViewStudentCard: boolean;
+  canEditStudents: boolean;
+  canArchiveStudents: boolean;
+  canDeleteStudents: boolean;
+  canAddPayments: boolean;
+  canViewPayments: boolean;
+  canManageUsers: boolean;
+  canOpenOwnerPanel: boolean;
+}
+
+function computePermissions(role: string | undefined): Permissions {
+  const isOwner = role === 'owner';
+  const isAdmin = role === 'admin' || isOwner;
+  // Teacher = 'user' role (базовый преподавательский доступ)
+  const isTeacher = role === 'user' || isAdmin;
+
+  return {
+    canViewStudents: true,                // Все аутентифицированные
+    canViewStudentCard: true,             // Все аутентифицированные
+    canEditStudents: isTeacher,           // Teacher+
+    canArchiveStudents: isTeacher,        // Teacher+
+    canDeleteStudents: isOwner,           // Только Owner
+    canAddPayments: isTeacher,            // Teacher+
+    canViewPayments: true,                // Все аутентифицированные
+    canManageUsers: isAdmin,              // Admin+
+    canOpenOwnerPanel: isOwner,           // Только Owner
+  };
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -21,6 +67,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isOwner: boolean;
   isTester: boolean;
+  permissions: Permissions;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -110,9 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isOwner = user?.role === 'owner';
   const isAdmin = user?.role === 'admin' || user?.role === 'owner';
   const isTester = user?.role === 'tester';
+  const permissions = computePermissions(user?.role);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, isAdmin, isOwner, isTester }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, isAdmin, isOwner, isTester, permissions }}>
       {children}
     </AuthContext.Provider>
   );

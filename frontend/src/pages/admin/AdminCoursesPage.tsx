@@ -7,7 +7,7 @@ const COLORS = ['#6C5CE7', '#00B894', '#FD79A8', '#FDCB6E', '#0984E3', '#E17055'
 const DAYS_OPTIONS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export default function AdminCoursesPage() {
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,9 +27,9 @@ export default function AdminCoursesPage() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return; }
+    if (!permissions.canManageUsers) { navigate('/'); return; }
     loadCourses();
-  }, [isAdmin]);
+  }, [permissions.canManageUsers]);
 
   const loadCourses = async () => {
     try {

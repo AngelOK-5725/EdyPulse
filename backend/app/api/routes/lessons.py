@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from backend.app.core.security import CurrentUser
+from backend.app.core.security import CurrentUser, AdminOnly
 from backend.app.services.lesson_service import (
     list_lessons, get_lesson, create_lesson, update_lesson, delete_lesson,
     ensure_lesson_for_course, enrich_lesson_with_attendance,
@@ -122,9 +122,9 @@ async def api_update_lesson(lesson_id: str, body: LessonUpdate, current_user: Cu
 
 
 @router.delete("/{lesson_id}")
-async def api_delete_lesson(lesson_id: str, current_user: CurrentUser):
-    """Soft-delete a lesson."""
-    success = delete_lesson(lesson_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+async def api_delete_lesson(lesson_id: str, admin: AdminOnly):
+    """Soft-delete a lesson (Admin, Owner)."""
+    success = delete_lesson(lesson_id, telegram_id=admin.telegram_id, role=admin.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
     return {"status": "ok"}

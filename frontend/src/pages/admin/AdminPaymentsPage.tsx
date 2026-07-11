@@ -12,7 +12,7 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function AdminPaymentsPage() {
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -32,9 +32,9 @@ export default function AdminPaymentsPage() {
   });
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return; }
+    if (!permissions.canManageUsers) { navigate('/'); return; }
     loadData();
-  }, [isAdmin]);
+  }, [permissions.canManageUsers]);
 
   const loadData = async () => {
     try {

@@ -49,7 +49,7 @@ interface LessonData {
 export default function LessonDetailPage() {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
 
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
@@ -350,7 +350,7 @@ export default function LessonDetailPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
           Назад
         </button>
-        {isAdmin && (
+        {permissions.canManageUsers && (
           <div className="relative">
             <button
               onClick={() => setShowStatusMenu(!showStatusMenu)}
@@ -446,7 +446,7 @@ export default function LessonDetailPage() {
         <div className="tg-card">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-1.5">📝 Домашнее задание</h3>
-            {isAdmin && !showHomeworkEdit && (
+            {permissions.canManageUsers && !showHomeworkEdit && (
               <button onClick={() => { setHomeworkDraft(homework); setShowHomeworkEdit(true); }}
                 className="text-xs text-[var(--tg-theme-button-color)]">✏️</button>
             )}
@@ -575,8 +575,7 @@ export default function LessonDetailPage() {
         <div className="tg-card flex flex-col items-center py-8 text-center">
           <span className="text-5xl mb-3">😴</span>
           <p className="text-base font-semibold text-[var(--tg-theme-text-color)] mb-1">Занятие отменено</p>
-          <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>
-          {isAdmin && (
+          <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>            {permissions.canManageUsers && (
             <button onClick={() => handleStatusChange('scheduled')}
               className="mt-4 tg-button text-sm">Восстановить занятие</button>
           )}
