@@ -140,17 +140,12 @@ def get_internal_user_id(telegram_id: int) -> Optional[str]:
 
 
 def is_owner_role(role: str) -> bool:
-    """Check if a role string corresponds to the system owner."""
-    return role == UserRole.OWNER.value
+    """Check if a role string corresponds to the system owner.
 
-
-def is_admin_role(role: str) -> bool:
-    """Check if a role string corresponds to admin or owner (Admin+).
-
-    Admin+ has full data access and can manage users.
-    Teacher (USER) is the only role with restricted data access.
+    Only Owner bypasses data ownership filtering.
+    Admin and Teacher both work within their own data scope (least privilege).
     """
-    return role in (UserRole.ADMIN.value, UserRole.OWNER.value)
+    return role == UserRole.OWNER.value
 
 
 def update_user_role(telegram_id: int, new_role: str) -> bool:

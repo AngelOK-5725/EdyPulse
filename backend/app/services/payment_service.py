@@ -5,7 +5,7 @@ from datetime import datetime, date, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.services.user_service import get_internal_user_id, is_admin_role
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,11 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_payments(telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get all payment records, filtered by user_id for non-Admin+ users."""
+    """Get all payment records, filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         records = repo.get_all()
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         records.sort(key=lambda p: p.get("payment_date", ""), reverse=True)
@@ -54,11 +54,11 @@ def list_payments(telegram_id: Optional[int] = None, role: Optional[str] = None)
 
 
 def get_student_payments(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get all payments for a student. Filtered by user_id for non-Admin+ users."""
+    """Get all payments for a student. Filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         records = repo.find(student_id=student_id)
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         records.sort(key=lambda p: p.get("payment_date", ""), reverse=True)
@@ -106,7 +106,7 @@ def update_payment(payment_id: str, data: dict, telegram_id: Optional[int] = Non
         existing = repo.get_by_id(payment_id)
         if not existing:
             return False
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             if not user_id or existing.get("user_id", "") not in ("", user_id):
                 return False

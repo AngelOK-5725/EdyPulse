@@ -43,6 +43,7 @@ class StudentUpdate(BaseModel):
     telegram: Optional[str] = None
     course_ids: Optional[str] = None
     photo_url: Optional[str] = None
+    is_active: Optional[str] = None  # "true" to unarchive, "false" to archive
 
 
 @router.get("")

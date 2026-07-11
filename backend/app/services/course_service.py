@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.services.user_service import get_internal_user_id, is_admin_role
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import COURSES_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get active courses, filtered by user_id for non-Admin+ users."""
+    """Get active courses, filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         courses = repo.get_all()
@@ -49,13 +49,13 @@ def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) 
             logger.info(f"TRACE_DASHBOARD   course id={c.get('id','')!r}, user_id={c.get('user_id','')!r}, "
                         f"title={c.get('title','')!r}, days={c.get('days','')!r}")
 
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             logger.info(f"TRACE_DASHBOARD list_courses() — applying _user_filter with user_id={user_id!r}")
             courses = _user_filter(courses, user_id)
             logger.info(f"TRACE_DASHBOARD list_courses() — courses AFTER _user_filter: {len(courses)}")
         else:
-            logger.info(f"TRACE_DASHBOARD list_courses() — SKIP _user_filter (is_admin={is_admin_role(role or '')})")
+            logger.info(f"TRACE_DASHBOARD list_courses() — SKIP _user_filter (is_owner={is_owner_role(role or '')})")
 
         active = [c for c in courses if c.get("is_active", "true") == "true"]
         logger.info(f"TRACE_DASHBOARD list_courses() — final active courses: {len(active)}")
@@ -66,13 +66,13 @@ def list_courses(telegram_id: Optional[int] = None, role: Optional[str] = None) 
 
 
 def get_course(course_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict]:
-    """Get a course by ID. Non-Admin+ users can only access their own or legacy records."""
+    """Get a course by ID. Non-Owner users can only access their own or legacy records."""
     repo = _get_repo()
     try:
         course = repo.get_by_id(course_id)
         if not course:
             return None
-        if is_admin_role(role or ""):
+        if is_owner_role(role or ""):
             return course
         if telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from backend.app.core.config import settings
-from backend.app.services.user_service import get_internal_user_id, is_admin_role
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import ATTENDANCE_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -40,11 +40,11 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None,
                     telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get attendance records, filtered by user_id for non-Admin+ users."""
+    """Get attendance records, filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         records = repo.get_all()
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         if course_id:
@@ -58,11 +58,11 @@ def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None,
 
 
 def get_student_attendance(student_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get attendance records for a student. Filtered by user_id for non-Admin+ users."""
+    """Get attendance records for a student. Filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         records = repo.find(student_id=student_id)
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         return records
@@ -145,7 +145,7 @@ def update_attendance(attendance_id: str, data: dict, telegram_id: Optional[int]
         existing = repo.get_by_id(attendance_id)
         if not existing:
             return False
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             if not user_id or existing.get("user_id", "") not in ("", user_id):
                 return False
@@ -156,11 +156,11 @@ def update_attendance(attendance_id: str, data: dict, telegram_id: Optional[int]
 
 
 def list_attendance_by_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get attendance records for a lesson. Filtered by user_id for non-Admin+ users."""
+    """Get attendance records for a lesson. Filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         records = repo.find(lesson_id=lesson_id)
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             records = _user_filter(records, user_id)
         return records

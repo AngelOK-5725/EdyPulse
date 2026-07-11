@@ -6,7 +6,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from backend.app.core.config import settings
-from backend.app.services.user_service import get_internal_user_id, is_admin_role
+from backend.app.services.user_service import get_internal_user_id, is_owner_role
 from sheets.repositories.headers import LESSONS_HEADERS
 
 logger = logging.getLogger(__name__)
@@ -50,11 +50,11 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None,
                  telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """List lessons, filtered by user_id for non-Admin+ users."""
+    """List lessons, filtered by user_id for non-Owner users."""
     repo = _get_repo()
     try:
         lessons = repo.get_all()
-        if not is_admin_role(role or "") and telegram_id is not None:
+        if not is_owner_role(role or "") and telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
             lessons = _user_filter(lessons, user_id)
         active = [l for l in lessons if l.get("is_active", "true") == "true"]
@@ -69,13 +69,13 @@ def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None
 
 
 def get_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> Optional[dict]:
-    """Get a lesson by ID. Non-Admin+ users can only access their own or legacy records."""
+    """Get a lesson by ID. Non-Owner users can only access their own or legacy records."""
     repo = _get_repo()
     try:
         lesson = repo.get_by_id(lesson_id)
         if not lesson:
             return None
-        if is_admin_role(role or ""):
+        if is_owner_role(role or ""):
             return lesson
         if telegram_id is not None:
             user_id = get_internal_user_id(telegram_id)
