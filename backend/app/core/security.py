@@ -74,9 +74,9 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
          client-side SDKs may append.
       2. Sort remaining key-value pairs alphabetically.
       3. Join as 'key=value' separated by newline → data_check_string.
-      4. Compute secret_key = HMAC-SHA256(bot_token, "WebAppData").
-         NOTE: key=bot_token, msg="WebAppData".
-      5. Compute signature = HMAC-SHA256(secret_key, data_check_string).
+      4. Compute secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token).
+         NOTE: key = "WebAppData" (literal), msg = bot_token.
+      5. Compute signature = HMAC-SHA256(key=secret_key, msg=data_check_string).
       6. Compare to received hash.
 
     Returns the parsed data dict with DECODED values if valid, None otherwise.
@@ -160,59 +160,24 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
 
         # --- Вычисление secret_key ---
         # Telegram spec:
-        # "secret_key = HMAC-SHA256(bot_token, "WebAppData")"
-        # Meaning: key=bot_token, msg="WebAppData"
-        # hmac.new(key, msg, digestmod)
-        secret_key_correct = _hmac_sha256(bot_token.encode(), "WebAppData".encode())
+        #   secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
+        #   signature = HMAC-SHA256(key=secret_key, msg=data_check_string)
+        #
+        # hmac.new(key, msg, digestmod) — первый аргумент ключ, второй сообщение.
+        secret_key = _hmac_sha256("WebAppData".encode(), bot_token.encode())
 
         # --- Вычисление подписи ---
         computed_hash = _hmac_sha256(
-            secret_key_correct,
+            secret_key,
             data_check_string.encode(),
         ).hex()
 
-        # ── DIAG: также пробуем обратный порядок аргументов (историческая неоднозначность Telegram docs) ───
-        secret_key_swapped = _hmac_sha256("WebAppData".encode(), bot_token.encode())
-        computed_hash_swapped = _hmac_sha256(
-            secret_key_swapped,
-            data_check_string.encode(),
-        ).hex()
-
-        # ── DIAG: логгируем все варианты ─────────────────────────────────────
-        logger.info(
-            "VALIDATE_HMAC: ————— DIAGNOSTICS —————"
-        )
-        logger.info(
-            "VALIDATE_HMAC: received_hash=%s",
-            received_hash
-        )
-        logger.info(
-            "VALIDATE_HMAC: data_check_string length=%d",
-            len(data_check_string)
-        )
-        logger.info(
-            "VALIDATE_HMAC: [аргументы spec]   key=bot_token,    msg='WebAppData'  → computed=%s  match=%s",
-            computed_hash,
-            computed_hash == received_hash
-        )
-        logger.info(
-            "VALIDATE_HMAC: [аргументы swapped] key='WebAppData', msg=bot_token    → computed=%s  match=%s",
-            computed_hash_swapped,
-            computed_hash_swapped == received_hash
-        )
-        logger.info(
-            "VALIDATE_HMAC: ————— END DIAGNOSTICS —————"
-        )
-
-        # --- Проверка: пробуем оба варианта ---
+        # ── Сравнение ──────────────────────────────────────────────────────────
         if computed_hash == received_hash:
-            logger.info("VALIDATE_HMAC: MATCH with spec-order arguments")
-        elif computed_hash_swapped == received_hash:
-            logger.info("VALIDATE_HMAC: MATCH with swapped-order arguments")
-            computed_hash = computed_hash_swapped
+            logger.info("VALIDATE_HMAC: hash MATCH — initData is valid")
         else:
             logger.warning(
-                "Telegram init data hash mismatch — ни один вариант не совпал. "
+                "Telegram init data hash mismatch. "
                 "Возможные причины: TELEGRAM_BOT_TOKEN не соответствует токену бота, "
                 "или initData подписан другим ботом."
             )
