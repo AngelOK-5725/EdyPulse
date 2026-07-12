@@ -172,6 +172,23 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             data_check_string.encode(),
         ).hex()
 
+        # ── DIAG: логируем хэши для диагностики ──────────────────────────────
+        logger.info("DIAG_HASH: received_hash=%s", received_hash)
+        logger.info("DIAG_HASH: computed_raw=%s", computed_hash)
+        logger.info("DIAG_HASH: raw_data_check_string (repr)=\n%s", repr(data_check_string))
+
+        # Пробуем URL-decoded вариант — возможно Telegram считает хэш по декодированным значениям
+        decoded_pairs = {k: unquote(v) for k, v in raw_pairs.items()}
+        decoded_data_check_string = "\n".join(
+            f"{k}={v}" for k, v in sorted(decoded_pairs.items())
+        )
+        computed_decoded = _hmac_sha256(
+            secret_key,
+            decoded_data_check_string.encode(),
+        ).hex()
+        logger.info("DIAG_HASH: computed_decoded=%s", computed_decoded)
+        logger.info("DIAG_HASH: decoded_data_check_string (repr)=\n%s", repr(decoded_data_check_string))
+
         # ── Сравнение ──────────────────────────────────────────────────────────
         if computed_hash == received_hash:
             logger.info("VALIDATE_HMAC: hash MATCH — initData is valid")
