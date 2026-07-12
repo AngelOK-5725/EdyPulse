@@ -60,11 +60,24 @@ def _parse_raw_pairs(init_data: str) -> dict[str, str]:
     return result
 
 
+def _hmac_sha256(key: bytes, msg: bytes) -> bytes:
+    """Compute HMAC-SHA256."""
+    return hmac.new(key, msg, hashlib.sha256).digest()
+
+
 def validate_telegram_init_data(init_data: str) -> Optional[dict]:
     """Validate Telegram WebApp init data using HMAC-SHA256.
 
-    NOTE: The data_check_string is built from RAW (URL-encoded) values,
-    NOT decoded. URL-decoding happens AFTER validation.
+    Per Telegram specification:
+      1. Remove 'hash' from init_data (it's the expected signature).
+         Also exclude any non-standard fields like 'signature' that
+         client-side SDKs may append.
+      2. Sort remaining key-value pairs alphabetically.
+      3. Join as 'key=value' separated by newline → data_check_string.
+      4. Compute secret_key = HMAC-SHA256(bot_token, "WebAppData").
+         NOTE: key=bot_token, msg="WebAppData".
+      5. Compute signature = HMAC-SHA256(secret_key, data_check_string).
+      6. Compare to received hash.
 
     Returns the parsed data dict with DECODED values if valid, None otherwise.
     """
@@ -118,11 +131,15 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             f"raw_pairs.get('signature')={raw_pairs.get('signature', 'NOT_FOUND')!r}"
         )
 
+        # --- Извлечение hash + очистка от нестандартных полей ---
         received_hash = raw_pairs.pop("hash", None)
-
         if not received_hash:
             logger.warning("VALIDATE_TRACE: no 'hash' field in raw_pairs — aborting")
             return None
+
+        # Удаляем нестандартное поле 'signature', если оно есть.
+        # Telegram не включает его в подпись — это артефакт клиентского SDK.
+        raw_pairs.pop("signature", None)
 
         # Build data-check string from RAW values (no URL decoding!)
         data_check_string = "\n".join(
@@ -136,52 +153,69 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             f"content={data_check_string!r}"
         )
         # ── DIAG: repr(data_check_string) — show ALL hidden characters ─────
-        # Need to see \n, \r, %, spaces, and any invisible changes
         logger.info(
             "DIAG_PARSE: repr(data_check_string)=\n%s",
             repr(data_check_string)
         )
 
-        # HMAC-SHA256 with "WebAppData" as key, then bot_token
-        secret_key = hmac.new(
-            "WebAppData".encode(), bot_token.encode(), hashlib.sha256
-        ).digest()
+        # --- Вычисление secret_key ---
+        # Telegram spec:
+        # "secret_key = HMAC-SHA256(bot_token, "WebAppData")"
+        # Meaning: key=bot_token, msg="WebAppData"
+        # hmac.new(key, msg, digestmod)
+        secret_key_correct = _hmac_sha256(bot_token.encode(), "WebAppData".encode())
 
-        computed_hash = hmac.new(
-            secret_key, data_check_string.encode(), hashlib.sha256
-        ).hexdigest()
+        # --- Вычисление подписи ---
+        computed_hash = _hmac_sha256(
+            secret_key_correct,
+            data_check_string.encode(),
+        ).hex()
 
-        # ── TRACE: hash comparison (Вариант A — с signature) ────────────────
+        # ── DIAG: также пробуем обратный порядок аргументов (историческая неоднозначность Telegram docs) ───
+        secret_key_swapped = _hmac_sha256("WebAppData".encode(), bot_token.encode())
+        computed_hash_swapped = _hmac_sha256(
+            secret_key_swapped,
+            data_check_string.encode(),
+        ).hex()
+
+        # ── DIAG: логгируем все варианты ─────────────────────────────────────
         logger.info(
-            "VALIDATE_TRACE: hash comparison (A — with signature) — "
-            f"received_hash={received_hash!r} | "
-            f"computed_hash_with_signature={computed_hash!r} | "
-            f"match={computed_hash == received_hash}"
+            "VALIDATE_HMAC: ————— DIAGNOSTICS —————"
         )
-
-        # ── TRACE: Вариант B — исключаем и hash, и signature ──────────────────
-        # Строим data_check_string без полей hash и signature
-        pairs_without_hash_sig = {
-            k: v for k, v in raw_pairs.items()
-            if k not in ("hash", "signature")
-        }
-        data_check_string_no_sig = "\n".join(
-            f"{k}={v}" for k, v in sorted(pairs_without_hash_sig.items())
-        )
-        computed_hash_no_sig = hmac.new(
-            secret_key, data_check_string_no_sig.encode(), hashlib.sha256
-        ).hexdigest()
-
         logger.info(
-            "VALIDATE_TRACE: hash comparison (B — without hash/signature) — "
-            f"received_hash={received_hash!r} | "
-            f"data_check_string_without_signature={data_check_string_no_sig!r} | "
-            f"computed_hash_without_signature={computed_hash_no_sig!r} | "
-            f"match={computed_hash_no_sig == received_hash}"
+            "VALIDATE_HMAC: received_hash=%s",
+            received_hash
+        )
+        logger.info(
+            "VALIDATE_HMAC: data_check_string length=%d",
+            len(data_check_string)
+        )
+        logger.info(
+            "VALIDATE_HMAC: [аргументы spec]   key=bot_token,    msg='WebAppData'  → computed=%s  match=%s",
+            computed_hash,
+            computed_hash == received_hash
+        )
+        logger.info(
+            "VALIDATE_HMAC: [аргументы swapped] key='WebAppData', msg=bot_token    → computed=%s  match=%s",
+            computed_hash_swapped,
+            computed_hash_swapped == received_hash
+        )
+        logger.info(
+            "VALIDATE_HMAC: ————— END DIAGNOSTICS —————"
         )
 
-        if computed_hash != received_hash:
-            logger.warning("Telegram init data hash mismatch")
+        # --- Проверка: пробуем оба варианта ---
+        if computed_hash == received_hash:
+            logger.info("VALIDATE_HMAC: MATCH with spec-order arguments")
+        elif computed_hash_swapped == received_hash:
+            logger.info("VALIDATE_HMAC: MATCH with swapped-order arguments")
+            computed_hash = computed_hash_swapped
+        else:
+            logger.warning(
+                "Telegram init data hash mismatch — ни один вариант не совпал. "
+                "Возможные причины: TELEGRAM_BOT_TOKEN не соответствует токену бота, "
+                "или initData подписан другим ботом."
+            )
             return None
 
         # Validation passed — now decode values for usage
