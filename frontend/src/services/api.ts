@@ -287,12 +287,22 @@ export const api = {
   getToken: () => authToken,
 
   // Auth
-  login: (initData: string) =>
-    request<LoginResponse>('/auth/login', {
+  login: (initData: string) => {
+    // Сбрасываем authToken перед логином, чтобы случайно не отправить
+    // старый токен, восстановленный из localStorage.
+    // Сам api.login() не защищён — он создаёт новый токен.
+    const oldToken = authToken;
+    authToken = '';
+    return request<LoginResponse>('/auth/login', {
       method: 'POST',
       body: { init_data: initData },
-      headers: { 'Authorization': '' },
-    }),
+    }).finally(() => {
+      // Восстанавливаем токен на случай, если это не первый логин
+      // (например, при retry после неудачной попытки).
+      // Успешный логин сам вызовет api.setToken() и перезапишет.
+      authToken = oldToken;
+    });
+  },
   getMe: () => request<LoginResponse['user']>('/auth/me'),
 
   // Health

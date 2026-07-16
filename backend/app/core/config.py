@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
 
+    # Debug fallback — разрешает вход без JWT-токена (только для локальной разработки)
+    # ⚠️ На Render (продакшен) должно быть False или не задано!
+    # Render env vars:
+    #   DEBUG=false
+    #   ALLOW_DEBUG_FALLBACK=false (или не указывать, т.к. по умолчанию False)
+    ALLOW_DEBUG_FALLBACK: bool = False
+
     # JWT
     JWT_SECRET: str = "edupulse-jwt-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"

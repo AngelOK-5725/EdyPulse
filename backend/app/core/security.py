@@ -356,16 +356,19 @@ async def get_current_user(
         # CORSMiddleware should handle OPTIONS before reaching here,
         # but if it arrives, we still process it
 
-    if not authorization:
-        if settings.DEBUG:
+    # ── Страховка: если Authorization — пустая строка, считаем что его нет ──
+    # Фронтенд может случайно отправить Authorization: "" вместо того чтобы
+    # не отправлять заголовок вообще (см. api.login в frontend/src/services/api.ts).
+    if not authorization or authorization.strip() == "":
+        if settings.DEBUG and settings.ALLOW_DEBUG_FALLBACK:
             logger.warning(
                 f"AUTH_TRACE: >>> ENTERING DEBUG FALLBACK <<< | "
-                f"No Authorization header and DEBUG=True | "
+                f"No Authorization header, DEBUG={settings.DEBUG} and "
+                f"ALLOW_DEBUG_FALLBACK={settings.ALLOW_DEBUG_FALLBACK} | "
                 f"Method={http_method} | URL={endpoint_path} | "
                 f"Origin={request.headers.get('origin', 'N/A') if request else 'N/A'} | "
                 f"Referer={request.headers.get('referer', 'N/A') if request else 'N/A'} | "
-                f"User-Agent={request.headers.get('user-agent', 'N/A') if request else 'N/A'} | "
-                f"All request headers: {dict(request.headers) if request else 'N/A'}"
+                f"User-Agent={request.headers.get('user-agent', 'N/A') if request else 'N/A'}"
             )
             # Dev mode: allow requests without auth
             return AuthUser(telegram_id=0, role=UserRole.ADMIN)

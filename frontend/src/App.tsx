@@ -18,7 +18,7 @@ import UnderConstructionPage from './pages/UnderConstructionPage';
 import StudentsPage from './pages/StudentsPage';
 
 function AppContent() {
-  const { loading } = useAuth();
+  const { loading, error, user, login } = useAuth();
 
   if (loading) {
     return (
@@ -28,6 +28,37 @@ function AppContent() {
             <span className="text-xl font-bold text-white">EP</span>
           </div>
           <p className="text-sm text-[var(--tg-theme-hint-color)]">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Экран ошибки авторизации: логин не удался, пользователь не получен ─────
+  if (!loading && !user && error) {
+    return (
+      <div className="min-h-screen bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center p-8">
+        <div className="text-center max-w-sm animate-fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h2 className="text-lg font-bold text-[var(--tg-theme-text-color)] mb-2">
+            Ошибка авторизации
+          </h2>
+          <p className="text-sm text-[var(--tg-theme-hint-color)] mb-6 leading-relaxed">
+            Не удалось подключиться к серверу. Проверьте подключение к интернету
+            и попробуйте снова.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={login}
+              className="w-full py-3 rounded-2xl bg-[var(--tg-theme-button-color)] text-[var(--tg-theme-button-text-color)] font-semibold text-sm transition-all active:scale-[0.98] hover:opacity-90"
+            >
+              Повторить попытку
+            </button>
+            <p className="text-xs text-[var(--tg-theme-hint-color)] opacity-60">
+              Ошибка: {error}
+            </p>
+          </div>
         </div>
       </div>
     );

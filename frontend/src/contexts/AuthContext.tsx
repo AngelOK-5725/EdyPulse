@@ -82,9 +82,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const initData = window.Telegram?.WebApp.initData;
+      const telegramWebApp = window.Telegram?.WebApp;
+      const initData = telegramWebApp?.initData;
 
-      if (!initData) {
+      // ── Диагностика: проверяем состояние Telegram WebApp ──────────────────
+      console.log('[AUTH] login() started', {
+        hasTelegram: !!window.Telegram,
+        hasWebApp: !!telegramWebApp,
+        initDataLength: initData?.length ?? 0,
+        initDataPreview: initData ? initData.slice(0, 80) + '...' : '(empty)',
+        apiBase: import.meta.env.VITE_API_URL || '/api',
+        savedToken: localStorage.getItem('edupulse_token') ? 'exists' : 'none',
+      });
+
+      if (!initData || initData.trim() === '') {
+        console.warn('[AUTH] initData is empty — either outside Telegram or Mini App not ready');
         // Running outside Telegram — use demo mode
         setUser({
           id: '0',
@@ -99,8 +111,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      console.log('[AUTH] Sending login request to /api/auth/login');
       const result = await api.login(initData);
       const token = result.access_token;
+
+      console.log('[AUTH] Login success', { role: result.user.role, tokenPreview: token.slice(0, 20) + '...' });
 
       // Store token
       localStorage.setItem('edupulse_token', token);
@@ -114,19 +129,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Ошибка авторизации';
       setError(message);
-      console.error('Login failed:', err);
+      console.error('[AUTH] Login failed:', {
+        errorMessage: message,
+        error: err,
+        apiBase: import.meta.env.VITE_API_URL || '/api',
+        hasSavedToken: !!localStorage.getItem('edupulse_token'),
+      });
 
       // Fallback: try to use cached token
       const savedToken = localStorage.getItem('edupulse_token');
       if (savedToken) {
+        console.log('[AUTH] Trying saved token...');
         api.setToken(savedToken);
         try {
           const me = await api.getMe();
+          console.log('[AUTH] Saved token still valid', { role: me.role });
           setUser({
             ...me,
             role: me.role as 'owner' | 'admin' | 'tester' | 'user',
           });
         } catch {
+          console.warn('[AUTH] Saved token expired, clearing');
           localStorage.removeItem('edupulse_token');
         }
       }
