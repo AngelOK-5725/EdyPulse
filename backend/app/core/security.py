@@ -131,21 +131,17 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
             f"raw_pairs.get('signature')={raw_pairs.get('signature', 'NOT_FOUND')!r}"
         )
 
-        # --- Извлечение hash + очистка от нестандартных полей ---
+        # --- Извлечение hash ---
         received_hash = raw_pairs.pop("hash", None)
         if not received_hash:
             logger.warning("VALIDATE_TRACE: no 'hash' field in raw_pairs — aborting")
             return None
 
-        # Удаляем нестандартное поле 'signature', если оно есть.
-        # Telegram не включает его в подпись — это артефакт клиентского SDK.
-        raw_pairs.pop("signature", None)
-
         # ═══════════════════════════════════════════════════════════════════
         # Валидация HMAC по спецификации Telegram Mini App
         # ═══════════════════════════════════════════════════════════════════
         #
-        #   1. Удалить 'hash' (но НЕ 'signature' — он участвует в подсчёте)
+        #   1. Удалить 'hash' (но НЕ 'signature' — он участвует в подсчёте!)
         #   2. URL-decode все значения
         #   3. Отсортировать ключи A→Z
         #   4. Соединить как 'key=value' через \n → data_check_string
@@ -159,9 +155,7 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
         #   dcs_variant = dec_lf_sig  → URL-decoded, \n, WITH signature
         # ═══════════════════════════════════════════════════════════════════
 
-        # Удаляем только hash — signature ОСТАВЛЯЕМ
-        raw_pairs.pop("hash", None)
-        # signature НЕ удаляем!
+        # ВАЖНО: signature НЕ удаляем — он участвует в подсчёте хэша!
 
         # URL-decode значения, сортируем и соединяем через \n
         data_check_string = "\n".join(
