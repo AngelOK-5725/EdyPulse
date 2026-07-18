@@ -81,7 +81,7 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
 
     Returns the parsed data dict with DECODED values if valid, None otherwise.
     """
-    bot_token = settings.TELEGRAM_BOT_TOKEN
+    bot_token = settings.TELEGRAM_BOT_TOKEN.strip()
 
     # ── TRACE: raw init_data before any parsing ─────────────────────────────
     logger.info(
@@ -160,11 +160,11 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
 
         # --- Вычисление secret_key ---
         # Telegram spec:
-        #   secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
+        #   secret_key = HMAC-SHA256(key=bot_token, msg="WebAppData")
         #   signature = HMAC-SHA256(key=secret_key, msg=data_check_string)
         #
         # hmac.new(key, msg, digestmod) — первый аргумент ключ, второй сообщение.
-        secret_key = _hmac_sha256("WebAppData".encode(), bot_token.encode())
+        secret_key = _hmac_sha256(bot_token.encode(), "WebAppData".encode())
 
         # --- Вычисление подписи ---
         computed_hash = _hmac_sha256(

@@ -68,8 +68,9 @@ def validate_core(
         f"{k}={v}" for k, v in sorted(raw_pairs.items())
     )
 
+    # Telegram spec: secret_key = HMAC-SHA256(key=bot_token, msg="WebAppData")
     secret_key = hmac_sha256(
-        "WebAppData".encode(), bot_token.encode()
+        bot_token.encode(), "WebAppData".encode()
     )
     computed_raw_hash = hmac_sha256(
         secret_key, raw_data_check_string.encode()
@@ -107,7 +108,7 @@ def main():
         print("  python validate_initdata.py <bot_token> --file <path.txt>", file=sys.stderr)
         sys.exit(1)
 
-    bot_token = args[0]
+    bot_token = args[0].strip()
 
     if len(args) >= 3 and args[1] == "--file":
         with open(args[2], "r", encoding="utf-8") as f:
