@@ -68,9 +68,10 @@ def validate_core(
         f"{k}={v}" for k, v in sorted(raw_pairs.items())
     )
 
-    # Telegram spec: secret_key = HMAC-SHA256(key=bot_token, msg="WebAppData")
+    # Telegram spec: secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
+    # ВАЖНО: "WebAppData" — KEY, bot_token — MESSAGE
     secret_key = hmac_sha256(
-        bot_token.encode(), "WebAppData".encode()
+        "WebAppData".encode(), bot_token.encode()
     )
     computed_raw_hash = hmac_sha256(
         secret_key, raw_data_check_string.encode()

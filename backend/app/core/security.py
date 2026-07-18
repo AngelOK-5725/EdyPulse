@@ -141,64 +141,50 @@ def validate_telegram_init_data(init_data: str) -> Optional[dict]:
         # Telegram не включает его в подпись — это артефакт клиентского SDK.
         raw_pairs.pop("signature", None)
 
-        # Build data-check string from RAW values (no URL decoding!)
-        data_check_string = "\n".join(
-            f"{k}={v}" for k, v in sorted(raw_pairs.items())
-        )
-
-        # ── TRACE: data_check_string ────────────────────────────────────────
-        logger.info(
-            "VALIDATE_TRACE: data_check_string — "
-            f"length={len(data_check_string)} | "
-            f"content={data_check_string!r}"
-        )
-        # ── DIAG: repr(data_check_string) — show ALL hidden characters ─────
-        logger.info(
-            "DIAG_PARSE: repr(data_check_string)=\n%s",
-            repr(data_check_string)
-        )
-
-        # --- Вычисление secret_key ---
-        # Telegram spec:
-        #   secret_key = HMAC-SHA256(key=bot_token, msg="WebAppData")
-        #   signature = HMAC-SHA256(key=secret_key, msg=data_check_string)
+        # ═══════════════════════════════════════════════════════════════════
+        # Валидация HMAC по спецификации Telegram Mini App
+        # ═══════════════════════════════════════════════════════════════════
         #
-        # hmac.new(key, msg, digestmod) — первый аргумент ключ, второй сообщение.
-        secret_key = _hmac_sha256(bot_token.encode(), "WebAppData".encode())
+        #   1. Удалить 'hash' (но НЕ 'signature' — он участвует в подсчёте)
+        #   2. URL-decode все значения
+        #   3. Отсортировать ключи A→Z
+        #   4. Соединить как 'key=value' через \n → data_check_string
+        #   5. secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
+        #   6. signature = HMAC-SHA256(key=secret_key, msg=data_check_string)
+        #   7. Сравнить hex-дайджест с полученным hash
+        # ═══════════════════════════════════════════════════════════════════
+        #
+        # Диагностика (debug_telegram_auth.py) показала рабочую комбинацию:
+        #   secret_key = hmac_wa_tok  → HMAC(key="WebAppData", msg=bot_token)
+        #   dcs_variant = dec_lf_sig  → URL-decoded, \n, WITH signature
+        # ═══════════════════════════════════════════════════════════════════
 
-        # --- Вычисление подписи ---
-        computed_hash = _hmac_sha256(
-            secret_key,
-            data_check_string.encode(),
-        ).hex()
+        # Удаляем только hash — signature ОСТАВЛЯЕМ
+        raw_pairs.pop("hash", None)
+        # signature НЕ удаляем!
 
-        # ── DIAG: логируем хэши для диагностики ──────────────────────────────
-        logger.info("DIAG_HASH: received_hash=%s", received_hash)
-        logger.info("DIAG_HASH: computed_raw=%s", computed_hash)
-        logger.info("DIAG_HASH: raw_data_check_string (repr)=\n%s", repr(data_check_string))
-
-        # Пробуем URL-decoded вариант — возможно Telegram считает хэш по декодированным значениям
-        decoded_pairs = {k: unquote(v) for k, v in raw_pairs.items()}
-        decoded_data_check_string = "\n".join(
-            f"{k}={v}" for k, v in sorted(decoded_pairs.items())
+        # URL-decode значения, сортируем и соединяем через \n
+        data_check_string = "\n".join(
+            f"{k}={unquote(v)}" for k, v in sorted(raw_pairs.items())
         )
-        computed_decoded = _hmac_sha256(
-            secret_key,
-            decoded_data_check_string.encode(),
-        ).hex()
-        logger.info("DIAG_HASH: computed_decoded=%s", computed_decoded)
-        logger.info("DIAG_HASH: decoded_data_check_string (repr)=\n%s", repr(decoded_data_check_string))
 
-        # ── Сравнение ──────────────────────────────────────────────────────────
-        if computed_hash == received_hash:
-            logger.info("VALIDATE_HMAC: hash MATCH — initData is valid")
-        else:
+        # secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
+        secret_key = _hmac_sha256("WebAppData".encode(), bot_token.encode())
+
+        # Вычисляем ожидаемую подпись
+        computed_hash = _hmac_sha256(secret_key, data_check_string.encode()).hex()
+
+        # Сравнение
+        if computed_hash != received_hash:
             logger.warning(
                 "Telegram init data hash mismatch. "
-                "Возможные причины: TELEGRAM_BOT_TOKEN не соответствует токену бота, "
-                "или initData подписан другим ботом."
+                "Expected %s, got %s. "
+                "Run debug_telegram_auth.py locally with real initData to diagnose.",
+                computed_hash, received_hash
             )
             return None
+
+        logger.info("VALIDATE_HMAC: hash MATCH — initData is valid")
 
         # Validation passed — now decode values for usage
         return {k: unquote(v) for k, v in raw_pairs.items()}
