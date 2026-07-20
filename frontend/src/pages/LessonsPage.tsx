@@ -1167,8 +1167,8 @@ export default function LessonsPage() {
                                   </button>
                                 )}
 
-                                {/* Cancel (admins, non-cancelled) */}
-                                {isAdmin && lesson.status !== 'cancelled' && (
+                                {/* Cancel (teachers+, non-cancelled) */}
+                                {isTeacher && lesson.status !== 'cancelled' && lesson.status !== 'completed' && (
                                   <button
                                     onClick={() => {
                                       setOpenDropdownId(null);
@@ -1195,12 +1195,12 @@ export default function LessonsPage() {
                                 )}
 
                                 {/* Divider */}
-                                {isAdmin && (
+                                {isTeacher && (
                                   <div className="mx-3 my-1 border-t border-gray-100" />
                                 )}
 
-                                {/* Archive (admins) */}
-                                {isAdmin && (
+                                {/* Archive (teachers+) */}
+                                {isTeacher && (
                                   <button
                                     onClick={() => { setOpenDropdownId(null); handleArchive(lesson); }}
                                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-gray-50 transition-colors text-gray-500"
