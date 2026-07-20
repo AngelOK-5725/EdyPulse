@@ -16,6 +16,7 @@ import SystemPage from './pages/SystemPage';
 import SchoolPage from './pages/SchoolPage';
 import UnderConstructionPage from './pages/UnderConstructionPage';
 import StudentsPage from './pages/StudentsPage';
+import CoursesPage from './pages/CoursesPage';
 
 function AppContent() {
   const { loading, error, user, login } = useAuth();
@@ -82,7 +83,8 @@ function AppContent() {
           <Route path="/lesson/:lessonId" element={<LessonDetailPage />} />
           <Route path="/school" element={<SchoolPage />} />
           <Route path="/school/students" element={<StudentsPage />} />
-          <Route path="/school/courses" element={<UnderConstructionPage />} />
+          <Route path="/school/courses" element={<CoursesPage />} />
+          <Route path="/school/courses/:id" element={<UnderConstructionPage />} />
           <Route path="/school/lessons" element={<UnderConstructionPage />} />
           <Route path="/school/payments" element={<UnderConstructionPage />} />
           <Route path="/school/achievements" element={<UnderConstructionPage />} />
