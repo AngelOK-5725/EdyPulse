@@ -356,14 +356,14 @@ export default function LessonsPage() {
     return (
       <div className="p-4 animate-fade-in min-h-full flex flex-col items-center justify-center">
         <div className="tg-card flex flex-col items-center py-12 px-6 text-center max-w-sm mx-auto">
-          <span className="text-6xl mb-5">🚧</span>
+          <span className="text-6xl mb-5">⚠️</span>
           <h2 className="text-lg font-semibold text-[var(--tg-theme-text-color)] mb-2">
-            Раздел находится в разработке
+            Ошибка загрузки
           </h2>
           <p className="text-sm text-[var(--tg-theme-hint-color)] leading-relaxed">
-            Эта возможность появится
+            Не удалось загрузить данные.
             <br />
-            в одном из следующих обновлений EduPulse.
+            Проверьте подключение к серверу.
           </p>
           <details className="w-full mt-4">
             <summary className="text-xs text-[var(--tg-theme-hint-color)] cursor-pointer hover:opacity-70">

@@ -17,6 +17,7 @@ import SchoolPage from './pages/SchoolPage';
 import UnderConstructionPage from './pages/UnderConstructionPage';
 import StudentsPage from './pages/StudentsPage';
 import CoursesPage from './pages/CoursesPage';
+import CourseDetailPage from './pages/CourseDetailPage';
 import LessonsPage from './pages/LessonsPage';
 
 function AppContent() {
@@ -85,7 +86,7 @@ function AppContent() {
           <Route path="/school" element={<SchoolPage />} />
           <Route path="/school/students" element={<StudentsPage />} />
           <Route path="/school/courses" element={<CoursesPage />} />
-          <Route path="/school/courses/:id" element={<UnderConstructionPage />} />
+          <Route path="/school/courses/:id" element={<CourseDetailPage />} />
           <Route path="/school/lessons" element={<LessonsPage />} />
           <Route path="/school/payments" element={<UnderConstructionPage />} />
           <Route path="/school/achievements" element={<UnderConstructionPage />} />
