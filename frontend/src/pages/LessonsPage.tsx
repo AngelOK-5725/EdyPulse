@@ -106,6 +106,9 @@ export default function LessonsPage() {
   const [filterCourseId, setFilterCourseId] = useState<string>('all');
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()));
 
+  // ── Выбранный день (фильтр)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
   // ── Create/Edit form state ───────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<LessonItem | null>(null);
@@ -234,11 +237,11 @@ export default function LessonsPage() {
   }, [filteredLessons]);
 
   // ── Form handlers ────────────────────────────────────────────────────────
-  const openCreateForm = () => {
+  const openCreateForm = (presetDate?: string) => {
     setEditingLesson(null);
     setForm({
       course_id: courses.length > 0 ? courses[0].id : '',
-      date: getTodayString(),
+      date: presetDate || selectedDate || getTodayString(),
       time: '',
       title: '',
       location: '',
@@ -431,14 +434,16 @@ export default function LessonsPage() {
               <button
                 key={i}
                 onClick={() => {
-                  // Scroll to this date's section
+                  setSelectedDate(dateStr);
                   const el = document.getElementById(`lesson-date-${dateStr}`);
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
                 className={`flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-center transition-all ${
-                  isToday
-                    ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md'
-                    : 'bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-hint-color)] hover:opacity-80'
+                  selectedDate === dateStr
+                    ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md ring-2 ring-white/50'
+                    : isToday
+                      ? 'bg-[var(--tg-theme-button-color)]/80 text-white shadow-md'
+                      : 'bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-hint-color)] hover:opacity-80'
                 }`}
               >
                 <span className="text-[10px] font-medium">{WEEKDAYS[day.getDay()]}</span>
@@ -629,150 +634,201 @@ export default function LessonsPage() {
           const dayLessons = lessonsByDate[dateStr];
           const isToday = dateStr === getTodayString();
           const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+          const hasLessons = dayLessons && dayLessons.length > 0;
+          const isSelected = selectedDate === dateStr;
 
-          if (!dayLessons || dayLessons.length === 0) {
-            // Skip empty weekdays to keep clean, but show today & weekend
-            if (!isToday && isWeekend) return null;
-            if (!isToday && !isWeekend) return null;
-            return null;
-          }
+          // Если выбран конкретный день — показываем только его
+          if (selectedDate && !isSelected) return null;
 
           return (
-            <div key={dateStr} id={`lesson-date-${dateStr}`}>
-              {/* Date header */}
+            <div key={dateStr} id={`lesson-date-${dateStr}`}
+              className={`scroll-mt-16 transition-all duration-300 ${
+                isSelected && hasLessons
+                  ? 'ring-2 ring-[var(--tg-theme-button-color)]/20 rounded-2xl p-3 -mx-1 bg-[var(--tg-theme-button-color)]/[0.03]'
+                  : ''
+              }`}
+            >
+              {/* Date header — кликабельный */}
               <div className={`flex items-center gap-2 mb-2 ${isToday ? 'sticky top-0 z-10' : ''}`}>
-                <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  isToday
-                    ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md'
-                    : 'bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
-                }`}>
+                <button
+                  onClick={() => {
+                    // Повторный клик по тому же дню — сброс фильтра
+                    if (isSelected) {
+                      setSelectedDate(null);
+                    } else {
+                      setSelectedDate(dateStr);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${
+                    isSelected
+                      ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md'
+                      : isToday
+                        ? 'bg-[var(--tg-theme-button-color)]/80 text-white shadow-md'
+                        : 'bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                  }`}
+                >
                   {WEEKDAYS[day.getDay()]}
-                </div>
-                <span className={`text-xs ${isToday ? 'font-bold text-[var(--tg-theme-text-color)]' : 'text-[var(--tg-theme-hint-color)]'}`}>
+                </button>
+                <span className={`text-xs ${isToday || isSelected ? 'font-bold text-[var(--tg-theme-text-color)]' : 'text-[var(--tg-theme-hint-color)]'}`}>
                   {formatDateDisplay(day)}
                 </span>
                 <span className="text-[10px] text-[var(--tg-theme-hint-color)] ml-auto">
-                  {dayLessons.length} {dayLessons.length === 1 ? 'занятие' : 'занятий'}
+                  {hasLessons ? `${dayLessons!.length} ${dayLessons!.length === 1 ? 'занятие' : 'занятий'}` : ''}
                 </span>
+                {selectedDate && isSelected && (
+                  <button
+                    onClick={() => setSelectedDate(null)}
+                    className="text-[10px] text-[var(--tg-theme-button-color)] font-medium hover:opacity-70 transition-opacity"
+                  >
+                    Все дни
+                  </button>
+                )}
               </div>
 
-              {/* Lesson cards */}
-              <div className="space-y-2">
-                {dayLessons.map(lesson => {
-                  const statusInfo = getStatusInfo(lesson.status);
-                  const unmarkedCount = getUnmarkedCount(lesson);
-                  const totalMarked = getTotalMarked(lesson);
+              {/* Lesson cards или пустое состояние */}
+              {hasLessons ? (
+                <div className="space-y-2">
+                  {dayLessons!.map(lesson => {
+                    const statusInfo = getStatusInfo(lesson.status);
+                    const unmarkedCount = getUnmarkedCount(lesson);
+                    const totalMarked = getTotalMarked(lesson);
 
-                  return (
-                    <button
-                      key={lesson.id}
-                      onClick={() => navigate(`/lesson/${lesson.id}`)}
-                      className={`w-full text-left tg-card group hover:shadow-md transition-all duration-200 active:scale-[0.98] ${
-                        lesson.status === 'cancelled' ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Time column */}
-                        <div className="flex flex-col items-center min-w-[52px] pt-0.5">
-                          <span className="text-xl font-bold text-[var(--tg-theme-text-color)] leading-tight">
-                            {lesson.time || '—'}
-                          </span>
-                          <span className={`text-[10px] font-medium mt-0.5 px-1.5 py-0.5 rounded-full ${statusInfo.color}`}>
-                            {statusInfo.icon}
-                          </span>
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: lesson.color || getCourseColor(lesson.course_id) }} />
-                            <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate">
-                              {lesson.title || getCourseTitle(lesson.course_id)}
+                    return (
+                      <button
+                        key={lesson.id}
+                        onClick={() => navigate(`/lesson/${lesson.id}`)}
+                        className={`w-full text-left tg-card group hover:shadow-md transition-all duration-200 active:scale-[0.98] ${
+                          lesson.status === 'cancelled' ? 'opacity-60 ring-1 ring-red-300' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Time column */}
+                          <div className="flex flex-col items-center min-w-[52px] pt-0.5">
+                            <span className="text-xl font-bold text-[var(--tg-theme-text-color)] leading-tight">
+                              {lesson.time || '—'}
+                            </span>
+                            <span className={`text-[10px] font-medium mt-0.5 px-1.5 py-0.5 rounded-full ${statusInfo.color}`}>
+                              {statusInfo.icon}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                              {getCourseTitle(lesson.course_id)}
-                            </span>
-                            {lesson.student_count > 0 && (
-                              <>
-                                <span className="text-[var(--tg-theme-hint-color)]">·</span>
-                                <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                                  👨‍🎓 {lesson.student_count}
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: lesson.color || getCourseColor(lesson.course_id) }} />
+                              <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate">
+                                {lesson.title || getCourseTitle(lesson.course_id)}
+                              </span>
+                              {lesson.status === 'cancelled' && (
+                                <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full shrink-0">
+                                  ❌ Отменено
                                 </span>
-                              </>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                                {getCourseTitle(lesson.course_id)}
+                              </span>
+                              {lesson.student_count > 0 && (
+                                <>
+                                  <span className="text-[var(--tg-theme-hint-color)]">·</span>
+                                  <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                                    👨‍🎓 {lesson.student_count}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Attendance stats — скрываем для отменённых */}
+                            {lesson.status !== 'cancelled' && (
+                              <div className="flex items-center gap-2 mt-1.5">
+                                {lesson.attendance_stats.present > 0 && (
+                                  <span className="text-[10px] text-green-600">✅ {lesson.attendance_stats.present}</span>
+                                )}
+                                {lesson.attendance_stats.late > 0 && (
+                                  <span className="text-[10px] text-amber-600">⏰ {lesson.attendance_stats.late}</span>
+                                )}
+                                {lesson.attendance_stats.absent > 0 && (
+                                  <span className="text-[10px] text-red-600">❌ {lesson.attendance_stats.absent}</span>
+                                )}
+                                {unmarkedCount > 0 && (
+                                  <span className="text-[10px] text-gray-500">⏳ {unmarkedCount}</span>
+                                )}
+                                {totalMarked > 0 && unmarkedCount === 0 && (
+                                  <span className="text-[10px] text-green-600 font-medium">✓ Все отмечены</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Location */}
+                            {lesson.location && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <span className="text-[10px]">📍</span>
+                                <span className="text-[10px] text-[var(--tg-theme-hint-color)] truncate">
+                                  {lesson.location}
+                                </span>
+                              </div>
                             )}
                           </div>
 
-                          {/* Attendance stats */}
-                          {lesson.status !== 'cancelled' && (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              {lesson.attendance_stats.present > 0 && (
-                                <span className="text-[10px] text-green-600">✅ {lesson.attendance_stats.present}</span>
-                              )}
-                              {lesson.attendance_stats.late > 0 && (
-                                <span className="text-[10px] text-amber-600">⏰ {lesson.attendance_stats.late}</span>
-                              )}
-                              {lesson.attendance_stats.absent > 0 && (
-                                <span className="text-[10px] text-red-600">❌ {lesson.attendance_stats.absent}</span>
-                              )}
-                              {unmarkedCount > 0 && (
-                                <span className="text-[10px] text-gray-500">⏳ {unmarkedCount}</span>
-                              )}
-                              {totalMarked > 0 && unmarkedCount === 0 && (
-                                <span className="text-[10px] text-green-600 font-medium">✓ Все отмечены</span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Location */}
-                          {lesson.location && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <span className="text-[10px]">📍</span>
-                              <span className="text-[10px] text-[var(--tg-theme-hint-color)] truncate">
-                                {lesson.location}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex flex-col gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                          {isTeacher && lesson.status !== 'cancelled' && (
-                            <button
-                              onClick={() => navigate(`/lesson/${lesson.id}`)}
-                              className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-xs text-[var(--tg-theme-button-color)] transition-all active:scale-90"
-                              title="Отметить посещаемость"
-                            >
-                              📋
-                            </button>
-                          )}
-                          {isAdmin && (
-                            <>
+                          {/* Actions */}
+                          <div className="flex flex-col gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                            {isTeacher && lesson.status !== 'cancelled' && (
                               <button
-                                onClick={() => openEditForm(lesson)}
+                                onClick={() => navigate(`/lesson/${lesson.id}`)}
                                 className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-xs text-[var(--tg-theme-button-color)] transition-all active:scale-90"
-                                title="Редактировать"
+                                title="Отметить посещаемость"
                               >
-                                ✏️
+                                📋
                               </button>
-                              <button
-                                onClick={() => handleArchive(lesson)}
-                                className="p-1.5 rounded-xl hover:bg-red-50 text-xs text-red-500 transition-all active:scale-90"
-                                title="Архивировать"
-                              >
-                                🗑️
-                              </button>
-                            </>
-                          )}
+                            )}
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={() => openEditForm(lesson)}
+                                  className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-xs text-[var(--tg-theme-button-color)] transition-all active:scale-90"
+                                  title="Редактировать"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleArchive(lesson)}
+                                  className="p-1.5 rounded-xl hover:bg-red-50 text-xs text-red-500 transition-all active:scale-90"
+                                  title="Архивировать"
+                                >
+                                  🗑️
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-[var(--tg-theme-secondary-bg-color)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📭</span>
+                    <span className="text-xs text-[var(--tg-theme-hint-color)]">
+                      {isWeekend ? 'Выходной' : 'Занятий нет'}
+                    </span>
+                  </div>
+                  {isTeacher && (
+                    <button
+                      onClick={() => openCreateForm(dateStr)}
+                      className="text-xs font-medium text-[var(--tg-theme-button-color)] flex items-center gap-1 hover:opacity-70 transition-opacity"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Добавить
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -790,7 +846,7 @@ export default function LessonsPage() {
                 : 'Попробуйте другую неделю'}
             </p>
             {isTeacher && (
-              <button onClick={openCreateForm} className="tg-button text-sm py-2 px-6">
+              <button onClick={() => openCreateForm()} className="tg-button text-sm py-2 px-6">
                 + Добавить занятие
               </button>
             )}
@@ -810,7 +866,7 @@ export default function LessonsPage() {
       {/* ── Floating action button ────────────────────────────────────── */}
       {isTeacher && lessons.length > 0 && (
         <button
-          onClick={openCreateForm}
+          onClick={() => openCreateForm()}
           className="fixed bottom-20 right-4 z-40 tg-button shadow-lg shadow-[var(--tg-theme-button-color)]/30 rounded-2xl px-5 py-3.5 flex items-center gap-2 text-sm font-semibold animate-slide-up hover:scale-105 active:scale-95 transition-all"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

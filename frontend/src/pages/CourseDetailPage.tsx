@@ -160,14 +160,6 @@ export default function CourseDetailPage() {
           </svg>
           Назад
         </button>
-        {isAdmin && (
-          <button
-            onClick={() => navigate('/school/courses')}
-            className="text-xs text-[var(--tg-theme-button-color)] flex items-center gap-1 hover:opacity-80 transition-opacity"
-          >
-            ✏️ Редактировать
-          </button>
-        )}
       </div>
 
       {/* ── Course Hero ──────────────────────────────────────────────── */}
