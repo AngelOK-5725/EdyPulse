@@ -646,8 +646,9 @@ export default function LessonsPage() {
                   { value: 'cancelled', label: '❌ Отмена' },
                 ].map(type => {
                   const isMakeUp = type.value === 'make_up';
+                  const isReplacement = type.value === 'replacement';
                   const hasCancelledLessons = cancelledLessons.length > 0;
-                  const isDisabled = isMakeUp && !hasCancelledLessons && !editingLesson;
+                  const isDisabled = (isMakeUp && !hasCancelledLessons && !editingLesson) || isReplacement;
 
                   return (
                     <button key={type.value}
@@ -675,7 +676,7 @@ export default function LessonsPage() {
                               : 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
                             : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)] hover:opacity-80'
                       }`}
-                      title={isDisabled ? 'Нет отменённых занятий для возмещения' : type.label}
+                      title={isReplacement ? '🚧 В разработке' : isDisabled ? 'Нет отменённых занятий для возмещения' : type.label}
                     >
                       {type.label}
                       {isMakeUp && !editingLesson && (
