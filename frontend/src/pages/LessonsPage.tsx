@@ -138,7 +138,27 @@ export default function LessonsPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLessonDate, setCancelLessonDate] = useState('');
 
+  // ── Dropdown menu state
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // ── Make-up picker state
+  const [showMakeUpPicker, setShowMakeUpPicker] = useState(false);
+
   const formRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdownId(null);
+      }
+    };
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClick);
+    }
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [openDropdownId]);
 
   useEffect(() => {
     loadData();
@@ -243,6 +263,11 @@ export default function LessonsPage() {
   }, [lessons, filterCourseId, searchQuery]);
 
   // ── Group by day ─────────────────────────────────────────────────────────
+  // ── Cancelled lessons (for make-up picker)
+  const cancelledLessons = useMemo(() => {
+    return lessons.filter(l => l.status === 'cancelled');
+  }, [lessons]);
+
   const lessonsByDate = useMemo(() => {
     const grouped: Record<string, LessonItem[]> = {};
     for (const l of filteredLessons) {
@@ -619,25 +644,46 @@ export default function LessonsPage() {
                   { value: 'replacement', label: '🔄 Замена' },
                   { value: 'make_up', label: '🔁 Отработка' },
                   { value: 'cancelled', label: '❌ Отмена' },
-                ].map(type => (
-                  <button key={type.value}
-                    onClick={() => {
-                      setForm(f => ({ ...f, lesson_type: type.value }));
-                      if (type.value === 'cancelled') {
-                        setCancelLessonDate(form.date);
-                        setShowCancelModal(true);
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      form.lesson_type === type.value
-                        ? type.value === 'cancelled'
-                          ? 'border-red-400 bg-red-50 text-red-600'
-                          : 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
-                        : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
-                    }`}>
-                    {type.label}
-                  </button>
-                ))}
+                ].map(type => {
+                  const isMakeUp = type.value === 'make_up';
+                  const hasCancelledLessons = cancelledLessons.length > 0;
+                  const isDisabled = isMakeUp && !hasCancelledLessons && !editingLesson;
+
+                  return (
+                    <button key={type.value}
+                      onClick={() => {
+                        if (isDisabled) return;
+
+                        if (isMakeUp && hasCancelledLessons && !editingLesson) {
+                          // Show make-up picker first
+                          setShowMakeUpPicker(true);
+                          return;
+                        }
+
+                        setForm(f => ({ ...f, lesson_type: type.value }));
+                        if (type.value === 'cancelled') {
+                          setCancelLessonDate(form.date);
+                          setShowCancelModal(true);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        isDisabled
+                          ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
+                          : form.lesson_type === type.value
+                            ? type.value === 'cancelled'
+                              ? 'border-red-400 bg-red-50 text-red-600'
+                              : 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                            : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)] hover:opacity-80'
+                      }`}
+                      title={isDisabled ? 'Нет отменённых занятий для возмещения' : type.label}
+                    >
+                      {type.label}
+                      {isMakeUp && !editingLesson && (
+                        <span className="ml-1 text-[9px] opacity-70">({cancelledLessons.length})</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -657,13 +703,21 @@ export default function LessonsPage() {
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
             </div>
 
-            {/* Title */}
+            {/* Title — обязательно, если не выбран курс */}
             <div className="mb-4">
-              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📝 Название</label>
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">
+                📝 Название
+                {!form.course_id && <span className="text-red-500 ml-1">* обязательно</span>}
+              </label>
               <input type="text" value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Останется название курса, если не указано"
-                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+                placeholder={form.course_id ? 'Останется название курса, если не указано' : 'Укажите название занятия'}
+                className={`w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30 ${
+                  !form.course_id && !form.title ? 'ring-1 ring-red-300' : ''
+                }`} />
+              {!form.course_id && !form.title && (
+                <p className="text-[10px] text-red-500 mt-1">Укажите название — курс не выбран</p>
+              )}
             </div>
 
             {/* Location */}
@@ -852,6 +906,75 @@ export default function LessonsPage() {
       )}
 
 
+      {/* ── Make-up picker modal — выбор отменённого занятия для возмещения */}
+      {showMakeUpPicker && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => { setShowMakeUpPicker(false); setForm(f => ({ ...f, lesson_type: 'regular' })); }}>
+          <div
+            className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--tg-theme-text-color)]">🔁 Выберите занятие для отработки</h3>
+              <button onClick={() => { setShowMakeUpPicker(false); setForm(f => ({ ...f, lesson_type: 'regular' })); }}
+                className="w-8 h-8 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-sm hover:opacity-70 transition-opacity">
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--tg-theme-hint-color)] mb-4">
+              Выберите отменённое занятие, которое хотите возместить
+            </p>
+
+            <div className="space-y-2">
+              {cancelledLessons.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="text-3xl block mb-2">📭</span>
+                  <p className="text-sm text-[var(--tg-theme-hint-color)]">Нет отменённых занятий</p>
+                </div>
+              ) : (
+                cancelledLessons.map(cl => (
+                  <button key={cl.id}
+                    onClick={() => {
+                      setForm(f => ({
+                        ...f,
+                        course_id: cl.course_id,
+                        lesson_type: 'make_up',
+                        title: `Отработка: ${cl.title || getCourseTitle(cl.course_id)}`,
+                        date: getTodayString(),
+                        time: cl.time || '',
+                      }));
+                      setShowMakeUpPicker(false);
+                      setShowForm(true);
+                    }}
+                    className="w-full text-left p-3.5 rounded-2xl border-2 border-teal-200 bg-teal-50 hover:border-teal-300 hover:shadow-sm transition-all active:scale-[0.98]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg shrink-0">📅</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-semibold text-teal-800 block truncate">
+                          {cl.title || getCourseTitle(cl.course_id)}
+                        </span>
+                        <span className="text-[11px] text-teal-600">
+                          {cl.date} {cl.time ? `· ${cl.time}` : ''}
+                          {' · '}{getCourseTitle(cl.course_id)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => { setShowMakeUpPicker(false); setForm(f => ({ ...f, lesson_type: 'regular' })); }}
+              className="w-full mt-4 py-3 rounded-xl text-sm text-[var(--tg-theme-hint-color)] hover:opacity-70 transition-opacity"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* ── Lessons list grouped by day ──────────────────────────────── */}
@@ -1007,34 +1130,85 @@ export default function LessonsPage() {
                             )}
                           </div>
 
-                          {/* Actions */}
-                          <div className="flex flex-col gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                            {isTeacher && lesson.status !== 'cancelled' && (
-                              <button
-                                onClick={() => navigate(`/lesson/${lesson.id}`)}
-                                className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-xs text-[var(--tg-theme-button-color)] transition-all active:scale-90"
-                                title="Отметить посещаемость"
+                          {/* Actions — dropdown menu */}
+                          <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => setOpenDropdownId(openDropdownId === lesson.id ? null : lesson.id)}
+                              className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-sm text-[var(--tg-theme-hint-color)] transition-all active:scale-90"
+                              title="Действия"
+                            >
+                              ⋮
+                            </button>
+
+                            {openDropdownId === lesson.id && (
+                              <div ref={dropdownRef}
+                                className="absolute right-0 top-full mt-1 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-30 animate-slide-up overflow-hidden"
                               >
-                                📋
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <>
-                                <button
-                                  onClick={() => openEditForm(lesson)}
-                                  className="p-1.5 rounded-xl hover:bg-[var(--tg-theme-secondary-bg-color)] text-xs text-[var(--tg-theme-button-color)] transition-all active:scale-90"
-                                  title="Редактировать"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleArchive(lesson)}
-                                  className="p-1.5 rounded-xl hover:bg-red-50 text-xs text-red-500 transition-all active:scale-90"
-                                  title="Архивировать"
-                                >
-                                  🗑️
-                                </button>
-                              </>
+                                {/* Mark attendance (teachers only, non-cancelled) */}
+                                {isTeacher && lesson.status !== 'cancelled' && lesson.status !== 'completed' && (
+                                  <button
+                                    onClick={() => { setOpenDropdownId(null); navigate(`/lesson/${lesson.id}`); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-gray-50 transition-colors"
+                                  >
+                                    <span>📋</span>
+                                    <span>Отметить посещаемость</span>
+                                  </button>
+                                )}
+
+                                {/* Edit (admins) */}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => { setOpenDropdownId(null); openEditForm(lesson); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-gray-50 transition-colors"
+                                  >
+                                    <span>✏️</span>
+                                    <span>Редактировать</span>
+                                  </button>
+                                )}
+
+                                {/* Cancel (admins, non-cancelled) */}
+                                {isAdmin && lesson.status !== 'cancelled' && (
+                                  <button
+                                    onClick={() => {
+                                      setOpenDropdownId(null);
+                                      // Open cancel modal for existing lesson
+                                      setEditingLesson(lesson);
+                                      setForm({
+                                        course_id: lesson.course_id,
+                                        date: lesson.date,
+                                        time: lesson.time || '',
+                                        title: lesson.title,
+                                        lesson_type: 'cancelled',
+                                        status: lesson.status || 'scheduled',
+                                        location: lesson.location || '',
+                                        location_link: lesson.location_link || '',
+                                      });
+                                      setCancelLessonDate(lesson.date);
+                                      setShowCancelModal(true);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-red-50 transition-colors text-red-600"
+                                  >
+                                    <span>❌</span>
+                                    <span>Отменить занятие</span>
+                                  </button>
+                                )}
+
+                                {/* Divider */}
+                                {isAdmin && (
+                                  <div className="mx-3 my-1 border-t border-gray-100" />
+                                )}
+
+                                {/* Archive (admins) */}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => { setOpenDropdownId(null); handleArchive(lesson); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-gray-50 transition-colors text-gray-500"
+                                  >
+                                    <span>🗑️</span>
+                                    <span>Архивировать</span>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
