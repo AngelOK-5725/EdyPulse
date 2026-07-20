@@ -34,6 +34,8 @@ interface CreateLessonData {
   date: string;
   time: string;
   title: string;
+  lesson_type: string; // regular | one_time | replacement | make_up
+  status: string;
   location: string;
   location_link: string;
 }
@@ -81,6 +83,14 @@ function getTodayString(): string {
   return formatDate(new Date());
 }
 
+const LESSON_TYPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  regular: { label: 'Обычное', icon: '📘', color: 'text-blue-600 bg-blue-50' },
+  one_time: { label: 'Разовое', icon: '⭐', color: 'text-amber-600 bg-amber-50' },
+  replacement: { label: 'Замена', icon: '🔄', color: 'text-indigo-600 bg-indigo-50' },
+  make_up: { label: 'Отработка', icon: '🔁', color: 'text-teal-600 bg-teal-50' },
+  cancelled: { label: 'Отмена', icon: '❌', color: 'text-red-600 bg-red-50' },
+};
+
 const STATUS_LABELS: Record<string, { label: string; icon: string; color: string }> = {
   scheduled: { label: 'Запланировано', icon: '✅', color: 'text-green-600 bg-green-50 border-green-200' },
   completed: { label: 'Проведено', icon: '✅', color: 'text-blue-600 bg-blue-50 border-blue-200' },
@@ -118,9 +128,15 @@ export default function LessonsPage() {
     date: getTodayString(),
     time: '',
     title: '',
+    lesson_type: 'regular',
+    status: 'scheduled',
     location: '',
     location_link: '',
   });
+
+  // ── Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLessonDate, setCancelLessonDate] = useState('');
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -240,10 +256,12 @@ export default function LessonsPage() {
   const openCreateForm = (presetDate?: string) => {
     setEditingLesson(null);
     setForm({
-      course_id: courses.length > 0 ? courses[0].id : '',
+      course_id: '',
       date: presetDate || selectedDate || getTodayString(),
       time: '',
       title: '',
+      lesson_type: 'regular',
+      status: 'scheduled',
       location: '',
       location_link: '',
     });
@@ -257,6 +275,8 @@ export default function LessonsPage() {
       date: lesson.date,
       time: lesson.time || '',
       title: lesson.title,
+      lesson_type: (lesson as any).lesson_type || 'regular',
+      status: lesson.status || 'scheduled',
       location: lesson.location || '',
       location_link: lesson.location_link || '',
     });
@@ -270,14 +290,16 @@ export default function LessonsPage() {
 
   // ── Create ───────────────────────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!form.course_id || !form.date) return;
+    if (!form.date || (!form.course_id && !form.title)) return;
     setSaving(true);
     try {
       await api.createLesson({
-        course_id: form.course_id,
+        course_id: form.course_id || undefined,
         date: form.date,
         time: form.time || undefined,
         title: form.title || undefined,
+        lesson_type: form.lesson_type || 'regular',
+        status: form.lesson_type === 'cancelled' ? 'cancelled' : (form.status || 'scheduled'),
         location: form.location || undefined,
         location_link: form.location_link || undefined,
       });
@@ -293,14 +315,16 @@ export default function LessonsPage() {
 
   // ── Update ───────────────────────────────────────────────────────────────
   const handleUpdate = async () => {
-    if (!editingLesson || !form.course_id || !form.date) return;
+    if (!editingLesson || !form.date || (!form.course_id && !form.title)) return;
     setSaving(true);
     try {
       await api.updateLesson(editingLesson.id, {
-        course_id: form.course_id,
+        course_id: form.course_id || undefined,
         date: form.date,
         time: form.time || undefined,
         title: form.title || undefined,
+        lesson_type: form.lesson_type || 'regular',
+        status: form.lesson_type === 'cancelled' ? 'cancelled' : (form.status || 'scheduled'),
         location: form.location || undefined,
         location_link: form.location_link || undefined,
       });
@@ -329,6 +353,13 @@ export default function LessonsPage() {
   // ── Status display ───────────────────────────────────────────────────────
   const getStatusInfo = (status: string) => {
     return STATUS_LABELS[status] || { label: status, icon: '❓', color: 'text-gray-600 bg-gray-50 border-gray-200' };
+  };
+
+  const getLessonTypeInfo = (lesson: LessonItem) => {
+    const type = (lesson as any).lesson_type;
+    // Не показываем бейдж для обычных (regular) занятий — это состояние по умолчанию
+    if (!type || type === 'regular' || type === 'cancelled') return null;
+    return LESSON_TYPE_LABELS[type] || null;
   };
 
   const getUnmarkedCount = (lesson: LessonItem): number => {
@@ -532,10 +563,10 @@ export default function LessonsPage() {
 
       {/* ── Create/Edit form modal ───────────────────────────────────── */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4 animate-fade-in"
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-fade-in"
           onClick={closeForm}>
           <div ref={formRef}
-            className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-lg p-5 pb-8 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
+            className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-lg p-5 shadow-2xl animate-slide-up max-h-[85vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
 
             <div className="flex items-center justify-between mb-5">
@@ -548,10 +579,19 @@ export default function LessonsPage() {
               </button>
             </div>
 
-            {/* Course selector */}
+            {/* Course selector - optional */}
             <div className="mb-4">
-              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📚 Курс *</label>
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📚 Курс</label>
               <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setForm(f => ({ ...f, course_id: '' }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    !form.course_id
+                      ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                      : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                  }`}>
+                  ➖ Не выбран
+                </button>
                 {courses.map(c => (
                   <button key={c.id}
                     onClick={() => setForm(f => ({ ...f, course_id: c.id }))}
@@ -566,6 +606,38 @@ export default function LessonsPage() {
                 {courses.length === 0 && (
                   <p className="text-xs text-[var(--tg-theme-hint-color)]">Нет доступных курсов</p>
                 )}
+              </div>
+            </div>
+
+            {/* Lesson type selector */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">🏷️ Тип занятия</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: 'regular', label: '📘 Обычное' },
+                  { value: 'one_time', label: '⭐ Разовое' },
+                  { value: 'replacement', label: '🔄 Замена' },
+                  { value: 'make_up', label: '🔁 Отработка' },
+                  { value: 'cancelled', label: '❌ Отмена' },
+                ].map(type => (
+                  <button key={type.value}
+                    onClick={() => {
+                      setForm(f => ({ ...f, lesson_type: type.value }));
+                      if (type.value === 'cancelled') {
+                        setCancelLessonDate(form.date);
+                        setShowCancelModal(true);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      form.lesson_type === type.value
+                        ? type.value === 'cancelled'
+                          ? 'border-red-400 bg-red-50 text-red-600'
+                          : 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                        : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                    }`}>
+                    {type.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -617,7 +689,7 @@ export default function LessonsPage() {
                 className="tg-button-secondary flex-1 text-sm">Отмена</button>
               <button
                 onClick={editingLesson ? handleUpdate : handleCreate}
-                disabled={saving || !form.course_id || !form.date}
+                disabled={saving || !form.date || (!form.course_id && !form.title)}
                 className="tg-button flex-1 text-sm disabled:opacity-50"
               >
                 {saving ? '⏳ Сохранение...' : editingLesson ? '✓ Сохранить' : '✓ Создать'}
@@ -626,6 +698,161 @@ export default function LessonsPage() {
           </div>
         </div>
       )}
+
+
+      {/* ── Cancel lesson modal ──────────────────────────────────────── */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => {
+            setShowCancelModal(false);
+            setForm(f => ({ ...f, lesson_type: 'regular' }));
+          }}>
+          <div
+            className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="text-center mb-5">
+              <span className="text-5xl block mb-3">🤔</span>
+              <h3 className="text-lg font-bold text-[var(--tg-theme-text-color)] mb-1">
+                Когда проведём отменённое занятие?
+              </h3>
+              <p className="text-xs text-[var(--tg-theme-hint-color)]">
+                Выберите, что делать с этим занятием
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {/* Option: Today */}
+              <button
+                onClick={async () => {
+                  setShowCancelModal(false);
+                  setSaving(true);
+                  try {
+                    const data = {
+                      course_id: form.course_id || undefined,
+                      date: getTodayString(),
+                      time: form.time || undefined,
+                      title: form.title || undefined,
+                      lesson_type: form.lesson_type || 'cancelled',
+                      status: 'rescheduled',
+                      location: form.location || undefined,
+                      location_link: form.location_link || undefined,
+                    };
+                    if (editingLesson) {
+                      await api.updateLesson(editingLesson.id, data);
+                    } else {
+                      await api.createLesson(data);
+                    }
+                    closeForm();
+                    await loadData();
+                  } catch (e) {
+                    console.error('Failed to save:', e);
+                    alert('Ошибка при сохранении');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] ${saving ? 'opacity-50 pointer-events-none' : ''} border-green-200 bg-green-50 hover:border-green-300`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">📅</span>
+                  <div>
+                    <span className="text-sm font-semibold text-green-800 block">Проведём сегодня</span>
+                    <span className="text-[11px] text-green-600">Перенести на сегодняшний день</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option: Reschedule */}
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setForm(f => ({ ...f, status: 'rescheduled' }));
+                }}
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] ${saving ? 'opacity-50 pointer-events-none' : ''} border-amber-200 bg-amber-50 hover:border-amber-300`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🔄</span>
+                  <div>
+                    <span className="text-sm font-semibold text-amber-800 block">Перенести на другой день</span>
+                    <span className="text-[11px] text-amber-600">Выбрать новую дату в форме</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option: Mark later */}
+              <button
+                onClick={async () => {
+                  setShowCancelModal(false);
+                  setSaving(true);
+                  try {
+                    const data = {
+                      course_id: form.course_id || undefined,
+                      date: form.date,
+                      time: form.time || undefined,
+                      title: form.title || undefined,
+                      lesson_type: 'cancelled',
+                      status: 'cancelled',
+                      location: form.location || undefined,
+                      location_link: form.location_link || undefined,
+                    };
+                    let savedLesson;
+                    if (editingLesson) {
+                      savedLesson = await api.updateLesson(editingLesson.id, data);
+                    } else {
+                      savedLesson = await api.createLesson(data);
+                    }
+
+                    // Save reminder to localStorage
+                    const reminder = {
+                      id: 'rem_' + Date.now(),
+                      lesson_id: editingLesson?.id || savedLesson?.id || '',
+                      course_id: form.course_id || '',
+                      title: form.title || getCourseTitle(form.course_id) || 'Занятие',
+                      original_date: form.date,
+                      created_at: new Date().toISOString(),
+                      type: 'cancelled_mark_later',
+                    };
+                    const existing = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
+                    existing.push(reminder);
+                    localStorage.setItem('edu_pulse_reminders', JSON.stringify(existing));
+
+                    closeForm();
+                    await loadData();
+                  } catch (e) {
+                    console.error('Failed to save:', e);
+                    alert('Ошибка при сохранении');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] ${saving ? 'opacity-50 pointer-events-none' : ''} border-purple-200 bg-purple-50 hover:border-purple-300`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⏰</span>
+                  <div>
+                    <span className="text-sm font-semibold text-purple-800 block">Отмечу позже</span>
+                    <span className="text-[11px] text-purple-600">Напомнить в Inbox (Важные)</span>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowCancelModal(false);
+                setForm(f => ({ ...f, lesson_type: 'regular' }));
+              }}
+              className="w-full mt-4 py-3 rounded-xl text-sm text-[var(--tg-theme-hint-color)] hover:opacity-70 transition-opacity"
+            >
+              Назад
+            </button>
+          </div>
+        </div>
+      )}
+
+
+
 
       {/* ── Lessons list grouped by day ──────────────────────────────── */}
       <div className="space-y-4">
@@ -690,6 +917,7 @@ export default function LessonsPage() {
                 <div className="space-y-2">
                   {dayLessons!.map(lesson => {
                     const statusInfo = getStatusInfo(lesson.status);
+                    const lessonTypeInfo = getLessonTypeInfo(lesson);
                     const unmarkedCount = getUnmarkedCount(lesson);
                     const totalMarked = getTotalMarked(lesson);
 
@@ -720,6 +948,12 @@ export default function LessonsPage() {
                               <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate">
                                 {lesson.title || getCourseTitle(lesson.course_id)}
                               </span>
+                              {/* Lesson type badge */}
+                              {lessonTypeInfo && lesson.status !== 'cancelled' && (
+                                <span className={`text-[9px] font-medium ${lessonTypeInfo.color} px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap`}>
+                                  {lessonTypeInfo.icon} {lessonTypeInfo.label}
+                                </span>
+                              )}
                               {lesson.status === 'cancelled' && (
                                 <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full shrink-0">
                                   ❌ Отменено

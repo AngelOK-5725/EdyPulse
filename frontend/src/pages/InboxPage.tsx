@@ -204,11 +204,33 @@ export default function InboxPage() {
   const [error, setError] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
+  const [localReminders, setLocalReminders] = useState<any[]>([]);
+
   useEffect(() => {
     loadInbox();
     const interval = setInterval(loadInbox, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Загружаем локальные напоминания из localStorage
+  useEffect(() => {
+    const loadReminders = () => {
+      try {
+        const data = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
+        setLocalReminders(data);
+      } catch {}
+    };
+    loadReminders();
+    window.addEventListener('storage', loadReminders);
+    return () => window.removeEventListener('storage', loadReminders);
+  }, []);
+
+  // Удалить напоминание
+  const dismissReminder = (id: string) => {
+    const updated = localReminders.filter(r => r.id !== id);
+    setLocalReminders(updated);
+    localStorage.setItem('edu_pulse_reminders', JSON.stringify(updated));
+  };
 
   const loadInbox = async () => {
     try {
@@ -296,6 +318,61 @@ export default function InboxPage() {
         ))}
         <span className="ml-auto text-[10px] opacity-60">{inbox.stats.total} всего</span>
       </div>
+
+      {/* ── Local reminders (cancelled lessons marked later) ────────── */}
+      {localReminders.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-sm">⏰</span>
+            <span className="text-xs font-semibold text-purple-700">
+              Напомнить о переносе
+            </span>
+            <span className="text-[10px] bg-purple-100 text-purple-600 rounded-full px-2 py-0.5 font-medium">
+              {localReminders.length}
+            </span>
+          </div>
+          {localReminders.map((reminder) => (
+            <div key={reminder.id}
+              className="rounded-xl border-2 border-purple-200 bg-purple-50 p-3.5 hover:shadow-sm transition-shadow"
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-lg shrink-0">❌</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-purple-800 truncate">
+                      {reminder.title}
+                    </span>
+                    <span className="text-[9px] font-bold text-purple-500 bg-purple-100 px-1.5 py-0.5 rounded-full shrink-0">
+                      ВАЖНО
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-purple-600 mt-0.5">
+                    Отменённое занятие от {reminder.original_date}. Нужно перенести!
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        // Navigate to lessons page with the original date
+                        navigate('/school/lessons');
+                        dismissReminder(reminder.id);
+                      }}
+                      className="text-[11px] font-medium text-white bg-purple-500 rounded-lg px-3 py-1.5 hover:bg-purple-600 transition-colors"
+                    >
+                      Запланировать
+                    </button>
+                    <button
+                      onClick={() => dismissReminder(reminder.id)}
+                      className="text-[11px] text-purple-400 hover:text-purple-600 transition-colors px-2 py-1"
+                    >
+                      ✓ Готово
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Groups ───────────────────────────────────────────────────── */}
       <div className="space-y-3">
