@@ -586,8 +586,8 @@ export default function CoursesPage() {
         )}
       </div>
 
-      {/* ── Floating Action Button (только для admin/owner) ──────────── */}
-      {isAdmin && courses.length > 0 && (
+      {/* ── Floating Action Button (user+/admin/owner) ──────────────── */}
+      {isTeacher && courses.length > 0 && (
         <button
           onClick={() => {
             if (showForm) {

@@ -190,10 +190,50 @@ export default function LessonsPage() {
       }));
 
       // Filter to the current week
-      const weekLessons = allLessons.filter(l => {
+      let weekLessons = allLessons.filter(l => {
         const d = l.date;
         return d >= startDate && d <= endDate;
       });
+
+      // ── Auto-generate missing lessons for courses on scheduled days ──
+      // This ensures the weekly schedule shows all expected lessons
+      const DAY_MAP: Record<string, number> = {
+        'Вс': 0, 'Пн': 1, 'Вт': 2, 'Ср': 3, 'Чт': 4, 'Пт': 5, 'Сб': 6,
+      };
+
+      const ensurePromises: Promise<any>[] = [];
+      for (const course of coursesData.courses) {
+        if (!course.days || course.is_active === 'false') continue;
+        const courseDays = course.days.split(',').map((d: string) => d.trim());
+        for (const day of weekDays) {
+          const dayName = WEEKDAYS[day.getDay()];
+          if (courseDays.includes(dayName)) {
+            const dateStr = formatDate(day);
+            // Check if a lesson for this course+date already exists
+            const alreadyExists = weekLessons.some(l => l.course_id === course.id && l.date === dateStr);
+            if (!alreadyExists && isTeacher) {
+              ensurePromises.push(api.ensureLesson(course.id, dateStr));
+            }
+          }
+        }
+      }
+
+      // If we created new lessons, reload the list
+      if (ensurePromises.length > 0) {
+        await Promise.all(ensurePromises);
+        const refreshedData = await api.getLessons();
+        const refreshedLessons: LessonItem[] = (refreshedData.lessons || []).map((l: any) => ({
+          ...l,
+          student_count: l.student_count || 0,
+          attendance_stats: l.attendance_stats || { present: 0, late: 0, absent: 0, trial: 0, unmarked: 0, total_marked: 0 },
+          unmarked_students: l.unmarked_students || [],
+          color: l.color || '#6C5CE7',
+        }));
+        weekLessons = refreshedLessons.filter(l => {
+          const d = l.date;
+          return d >= startDate && d <= endDate;
+        });
+      }
 
       setLessons(weekLessons);
     } catch (e) {
@@ -643,7 +683,6 @@ export default function LessonsPage() {
                   { value: 'one_time', label: '⭐ Разовое' },
                   { value: 'replacement', label: '🔄 Замена' },
                   { value: 'make_up', label: '🔁 Отработка' },
-                  { value: 'cancelled', label: '❌ Отмена' },
                 ].map(type => {
                   const isMakeUp = type.value === 'make_up';
                   const isReplacement = type.value === 'replacement';
@@ -662,18 +701,12 @@ export default function LessonsPage() {
                         }
 
                         setForm(f => ({ ...f, lesson_type: type.value }));
-                        if (type.value === 'cancelled') {
-                          setCancelLessonDate(form.date);
-                          setShowCancelModal(true);
-                        }
                       }}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         isDisabled
                           ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
                           : form.lesson_type === type.value
-                            ? type.value === 'cancelled'
-                              ? 'border-red-400 bg-red-50 text-red-600'
-                              : 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                            ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
                             : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)] hover:opacity-80'
                       }`}
                       title={isReplacement ? '🚧 В разработке' : isDisabled ? 'Нет отменённых занятий для возмещения' : type.label}
@@ -1145,17 +1178,6 @@ export default function LessonsPage() {
                               <div ref={dropdownRef}
                                 className="absolute right-0 top-full mt-1 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-30 animate-slide-up overflow-hidden"
                               >
-                                {/* Mark attendance (teachers only, non-cancelled) */}
-                                {isTeacher && lesson.status !== 'cancelled' && lesson.status !== 'completed' && (
-                                  <button
-                                    onClick={() => { setOpenDropdownId(null); navigate(`/lesson/${lesson.id}`); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left hover:bg-gray-50 transition-colors"
-                                  >
-                                    <span>📋</span>
-                                    <span>Отметить посещаемость</span>
-                                  </button>
-                                )}
-
                                 {/* Edit (admins) */}
                                 {isAdmin && (
                                   <button

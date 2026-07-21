@@ -140,58 +140,65 @@ function LessonCard({ item }: { item: InboxItem }) {
 
 // ─── Inbox Card (generic for non-lesson groups) ──────────────────────────
 
-function InboxCard({ item }: { item: InboxItem }) {
+function InboxCard({ item, onDismiss }: { item: InboxItem; onDismiss?: (id: string) => void }) {
   const navigate = useNavigate();
   const isHigh = item.priority === 'high';
   const styles = PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.low;
 
   return (
-    <button
-      onClick={() => navigate(item.action_url)}
-      className="w-full text-left transition-all duration-150 active:scale-[0.97] group"
-    >
-      <div className={`rounded-xl p-3.5 ${styles.bg} border ${styles.border} hover:shadow-sm transition-shadow`}>
-        <div className="flex items-center gap-3">
-          {/* Priority dot */}
-          <div className="flex flex-col items-center shrink-0">
-            <div className={`w-2.5 h-2.5 rounded-full ${styles.dot} ${isHigh ? 'animate-pulse' : ''}`} />
-          </div>
+    <div className={`rounded-xl p-3.5 ${styles.bg} border ${styles.border} hover:shadow-sm transition-shadow group`}>
+      <div className="flex items-center gap-3">
+        {/* Priority dot */}
+        <div className="flex flex-col items-center shrink-0">
+          <div className={`w-2.5 h-2.5 rounded-full ${styles.dot} ${isHigh ? 'animate-pulse' : ''}`} />
+        </div>
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={`text-sm font-semibold ${styles.text} truncate`}>
-                {item.title}
+        {/* Content — кликабельно */}
+        <button onClick={() => navigate(item.action_url)} className="flex-1 min-w-0 text-left">
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-semibold ${styles.text} truncate`}>
+              {item.title}
+            </span>
+            {isHigh && (
+              <span className="text-[9px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full shrink-0">
+                !
               </span>
-              {isHigh && (
-                <span className="text-[9px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full shrink-0">
-                  !
-                </span>
-              )}
-            </div>
-            {item.subtitle && (
-              <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
-                {item.subtitle}
-              </p>
             )}
           </div>
+          {item.subtitle && (
+            <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
+              {item.subtitle}
+            </p>
+          )}
+        </button>
 
-          {/* Action chip */}
-          <div className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all
-            ${isHigh
-              ? 'bg-red-500 text-white shadow-sm shadow-red-500/30'
-              : `${styles.bg} ${styles.text} border ${styles.border}`
-            }
-            group-hover:opacity-80`}
+        {/* Action chip + dismiss */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => navigate(item.action_url)}
+            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all
+              ${isHigh
+                ? 'bg-red-500 text-white shadow-sm shadow-red-500/30'
+                : `${styles.bg} ${styles.text} border ${styles.border}`
+              }
+              hover:opacity-80`}
           >
             {item.action_label}
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="inline ml-0.5 -mt-0.5">
               <polyline points="9 18 15 12 9 6" />
             </svg>
-          </div>
+          </button>
+          {onDismiss && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDismiss(item.id); }}
+              className="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-all text-[10px]"
+              title="Убрать из списка"
+            >
+              ✓
+            </button>
+          )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -205,11 +212,20 @@ export default function InboxPage() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const [localReminders, setLocalReminders] = useState<any[]>([]);
+  const [dismissedCancelled, setDismissedCancelled] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadInbox();
     const interval = setInterval(loadInbox, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Загружаем отклонённые отменённые занятия из localStorage
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('edu_pulse_dismissed_cancelled') || '[]');
+      setDismissedCancelled(new Set(stored));
+    } catch {}
   }, []);
 
   // Загружаем локальные напоминания из localStorage
@@ -230,6 +246,14 @@ export default function InboxPage() {
     const updated = localReminders.filter(r => r.id !== id);
     setLocalReminders(updated);
     localStorage.setItem('edu_pulse_reminders', JSON.stringify(updated));
+  };
+
+  // Отклонить отменённое занятие (убрать из inbox)
+  const dismissCancelledLesson = (id: string) => {
+    const updated = new Set(dismissedCancelled);
+    updated.add(id);
+    setDismissedCancelled(updated);
+    localStorage.setItem('edu_pulse_dismissed_cancelled', JSON.stringify([...updated]));
   };
 
   const loadInbox = async () => {
@@ -380,28 +404,43 @@ export default function InboxPage() {
           const isCollapsed = collapsedGroups[group.key] ?? false;
           const isLessonGroup = group.key === 'lessons';
 
+          // Pre-filter dismissed cancelled items
+          const displayItems = group.key === 'cancelled'
+            ? group.items.filter(i => !dismissedCancelled.has(i.id))
+            : group.items;
+
+          const hasFilteredNonLessonItems = group.key === 'cancelled' && displayItems.length === 0 && group.items.length > 0;
+
           return (
             <div key={group.key} className="space-y-1.5">
               <GroupHeader
-                group={group}
+                group={{ ...group, items: displayItems }}
                 collapsed={isCollapsed}
                 onToggle={() => toggleGroup(group.key)}
               />
 
               {!isCollapsed && (
                 <div className="space-y-1.5 pl-2 animate-slide-up">
-                  {group.items.length === 0 && isLessonGroup ? (
+                  {displayItems.length === 0 && isLessonGroup ? (
                     <div className="rounded-xl bg-white border border-dashed border-gray-200 p-6 text-center">
                       <div className="text-3xl mb-2">📅</div>
                       <p className="text-sm font-medium text-gray-700 mb-1">Сегодня занятий нет</p>
                       <p className="text-[11px] text-gray-400">Следующее занятие появится здесь автоматически.</p>
                     </div>
                   ) : (
-                    group.items.map((item) => (
+                    displayItems.map((item) => (
                       isLessonGroup
                         ? <LessonCard key={item.id} item={item} />
-                        : <InboxCard key={item.id} item={item} />
+                        : <InboxCard key={item.id} item={item}
+                            onDismiss={group.key === 'cancelled' ? dismissCancelledLesson : undefined}
+                          />
                     ))
+                  )}
+                  {/* Если после фильтрации осталось 0 — показываем "всё готово" */}
+                  {hasFilteredNonLessonItems && (
+                    <div className="rounded-xl bg-green-50 border border-green-100 p-3 text-center">
+                      <p className="text-xs text-green-700">✅ Все отменённые занятия обработаны</p>
+                    </div>
                   )}
                 </div>
               )}

@@ -8,7 +8,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-from backend.app.services.lesson_service import ensure_today_lessons, enrich_lesson_with_attendance
+from backend.app.services.lesson_service import ensure_today_lessons, enrich_lesson_with_attendance, list_lessons
 from backend.app.services.course_service import list_courses
 from backend.app.services.student_service import list_students
 from backend.app.services.attendance_service import list_attendance
@@ -38,6 +38,7 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
             student_attendance_map[sid] = []
         student_attendance_map[sid].append(a)
 
+    cancelled_items: list[dict[str, Any]] = []
     lesson_items: list[dict[str, Any]] = []
     payment_items: list[dict[str, Any]] = []
     trial_items: list[dict[str, Any]] = []
@@ -232,7 +233,40 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
                 "student_id": sid,
             })
 
-    # ── 5. QUICK ACTIONS ──────────────────────────────────────────────────
+    # ── 5. CANCELLED LESSONS (need make-up) ──────────────────────────────
+    # Show cancelled lessons from the last 14 days that need a make-up
+    # (fourteen_days_ago is already defined above)
+    all_lessons = list_lessons(telegram_id=telegram_id, role=role)
+    for lesson in all_lessons:
+        if lesson.get("status") != "cancelled":
+            continue
+        lesson_date = lesson.get("date", "")
+        if lesson_date < fourteen_days_ago:
+            continue
+
+        course_id = lesson.get("course_id", "")
+        title = lesson.get("title", "") or "Занятие"
+        course_title = ""
+        for c in courses:
+            if c.get("id") == course_id:
+                course_title = c.get("title", "")
+                break
+
+        display_title = title
+        if course_title and title != course_title:
+            display_title = f"{title} ({course_title})"
+
+        cancelled_items.append({
+            "id": f"cancelled_{lesson.get('id', '')}",
+            "title": f"❌ {display_title}",
+            "subtitle": f"Отменено {lesson_date} · требуется перенос",
+            "priority": "high",
+            "action_label": "Перенести",
+            "action_url": f"/school/lessons",
+            "lesson_id": lesson.get("id", ""),
+        })
+
+    # ── 6. QUICK ACTIONS ──────────────────────────────────────────────────
     action_items = [
         {
             "id": "action_new_student",
@@ -296,6 +330,15 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
             "items": attention_items,
         })
 
+    # Cancelled lessons (if any)
+    if cancelled_items:
+        groups.append({
+            "key": "cancelled",
+            "label": "Отменённые",
+            "icon": "❌",
+            "items": cancelled_items,
+        })
+
     # Actions always shown
     groups.append({
         "key": "actions",
@@ -305,7 +348,7 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
     })
 
     # ── STATS ──────────────────────────────────────────────────────────────
-    all_items = lesson_items + payment_items + trial_items + attention_items + action_items
+    all_items = lesson_items + payment_items + trial_items + attention_items + cancelled_items + action_items
     high_count = sum(1 for i in all_items if i.get("priority") == "high")
 
     return {
