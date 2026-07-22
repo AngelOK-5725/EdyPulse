@@ -446,13 +446,13 @@ export default function LessonDetailPage() {
           Назад
         </button>
         <div className="flex items-center gap-2">
-          {permissions.canManageUsers && (
+          {permissions.canEditStudents && (
             <button onClick={openEditLesson}
               className="text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 hover:bg-[var(--tg-theme-button-color)]/10 transition-colors">
               ✏️ Редактировать
             </button>
           )}
-          {permissions.canManageUsers && (
+          {permissions.canEditStudents && (
             <div className="relative">
               <button
                 onClick={() => setShowStatusMenu(!showStatusMenu)}
@@ -549,7 +549,7 @@ export default function LessonDetailPage() {
         <div className="tg-card">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-1.5">📝 Домашнее задание</h3>
-            {permissions.canManageUsers && !showHomeworkEdit && (
+            {permissions.canEditStudents && !showHomeworkEdit && (
               <button onClick={() => { setHomeworkDraft(homework); setShowHomeworkEdit(true); }}
                 className="text-xs text-[var(--tg-theme-button-color)]">✏️</button>
             )}
@@ -653,7 +653,7 @@ export default function LessonDetailPage() {
                       {currentStatus && !isSaving && <span className="text-[10px] text-green-500 font-medium shrink-0 ml-1">✓ {statusInfo?.label}</span>}
                       {isSaving && <span className="text-[10px] text-[var(--tg-theme-hint-color)] animate-pulse shrink-0">···</span>}
                     </button>
-                    {permissions.canManageUsers && (
+                    {permissions.canEditStudents && (
                       <button onClick={() => setShowAddAchievement(student.id)}
                         className="shrink-0 w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-xs hover:bg-amber-100 transition-all active:scale-90"
                         title="Добавить достижение">
@@ -794,7 +794,7 @@ export default function LessonDetailPage() {
           <span className="text-5xl mb-3">😴</span>
           <p className="text-base font-semibold text-[var(--tg-theme-text-color)] mb-1">Занятие отменено</p>
           <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>
-          {permissions.canManageUsers && (
+          {permissions.canEditStudents && (
             <button onClick={() => handleStatusChange('scheduled')}
               className="mt-4 tg-button text-sm">Восстановить занятие</button>
           )}
