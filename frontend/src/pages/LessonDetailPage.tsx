@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import api, { type Course, type Student, type AttendanceRecord } from '../services/api';
+import api, { type Course, type Student, type AttendanceRecord, type Achievement } from '../services/api';
 import { validateStudentForm, hasErrors, type StudentFormErrors } from '../services/validation';
 
 const STATUSES = [
@@ -16,6 +16,8 @@ const LESSON_STATUSES = [
   { key: 'cancelled', label: 'Отменено', icon: '❌', color: 'red' },
   { key: 'rescheduled', label: 'Перенесено', icon: '🔄', color: 'amber' },
 ] as const;
+
+const ACHIEVEMENT_ICONS = ['🏆', '🌟', '🎯', '🤖', '🎨', '⚡', '🔥', '💡', '🎵', '🏅', '📐', '🧩', '🎪', '🚀', '🌈'];
 
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
@@ -67,6 +69,25 @@ export default function LessonDetailPage() {
   const [showHomeworkEdit, setShowHomeworkEdit] = useState(false);
   const [homeworkDraft, setHomeworkDraft] = useState('');
 
+  // ── Lesson edit state ────────────────────────────────────────────────
+  const [showEditLesson, setShowEditLesson] = useState(false);
+  const [editDraft, setEditDraft] = useState({
+    title: '',
+    time: '',
+    location: '',
+    location_link: '',
+    homework: '',
+    note: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // ── Student achievements state ───────────────────────────────────────
+  const [achievementsMap, setAchievementsMap] = useState<Record<string, Achievement[]>>({});
+  const [expandedAchievements, setExpandedAchievements] = useState<Record<string, boolean>>({});
+  const [showAddAchievement, setShowAddAchievement] = useState<string | null>(null);
+  const [newAchievement, setNewAchievement] = useState({ icon: '🏆', title: '', description: '' });
+  const [savingAchievement, setSavingAchievement] = useState(false);
+
   // ── Add student state ──────────────────────────────────────────────────
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [addMode, setAddMode] = useState<'new' | 'existing'>('new');
@@ -115,6 +136,20 @@ export default function LessonDetailPage() {
         try {
           const studentsData = await api.getStudents(lessonData.course_id);
           setStudents(studentsData.students);
+
+          // Load achievements for each student
+          const achPromises = studentsData.students.map(async (s: Student) => {
+            try {
+              const achData = await api.getAchievements(s.id);
+              return { studentId: s.id, achievements: achData.achievements };
+            } catch { return { studentId: s.id, achievements: [] }; }
+          });
+          const achResults = await Promise.all(achPromises);
+          const achMap: Record<string, Achievement[]> = {};
+          for (const r of achResults) {
+            achMap[r.studentId] = r.achievements;
+          }
+          setAchievementsMap(achMap);
         } catch (e) {
           console.error('Failed to load students:', e);
         }
@@ -167,6 +202,42 @@ export default function LessonDetailPage() {
     }
   };
 
+  // ── Lesson edit modal ────────────────────────────────────────────────
+  const openEditLesson = () => {
+    if (!lesson) return;
+    setEditDraft({
+      title: lesson.title || '',
+      time: lesson.time || '',
+      location: lesson.location || '',
+      location_link: lesson.location_link || '',
+      homework: homework,
+      note: lesson.note || '',
+    });
+    setShowEditLesson(true);
+  };
+
+  const handleEditLessonSave = async () => {
+    if (!lesson) return;
+    setSavingEdit(true);
+    try {
+      await api.updateLesson(lesson.id, {
+        title: editDraft.title,
+        time: editDraft.time,
+        location: editDraft.location,
+        location_link: editDraft.location_link,
+        homework: editDraft.homework,
+        note: editDraft.note,
+      });
+      setLesson(prev => prev ? { ...prev, ...editDraft } : null);
+      setHomework(editDraft.homework);
+      setShowEditLesson(false);
+    } catch (e) {
+      console.error('Failed to save lesson:', e);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // ── Attendance ──────────────────────────────────────────────────────────
   const handleAttendance = useCallback(async (studentId: string, status: string) => {
     if (!lesson) return;
@@ -187,6 +258,30 @@ export default function LessonDetailPage() {
       setTimeout(() => setSavingStudent(null), 300);
     }
   }, [lesson, commentsMap]);
+
+  // ── Achievement management ───────────────────────────────────────────
+  const handleAddAchievement = async (studentId: string) => {
+    if (!newAchievement.title.trim()) return;
+    setSavingAchievement(true);
+    try {
+      const result = await api.createAchievement({
+        student_id: studentId,
+        title: newAchievement.title,
+        icon: newAchievement.icon,
+        description: newAchievement.description,
+      });
+      setAchievementsMap(prev => ({
+        ...prev,
+        [studentId]: [...(prev[studentId] || []), result],
+      }));
+      setNewAchievement({ icon: '🏆', title: '', description: '' });
+      setShowAddAchievement(null);
+    } catch (e) {
+      console.error('Failed to create achievement:', e);
+    } finally {
+      setSavingAchievement(false);
+    }
+  };
 
   const handleCommentChange = useCallback((studentId: string, comment: string) => {
     if (!lesson) return;
@@ -350,35 +445,43 @@ export default function LessonDetailPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
           Назад
         </button>
-        {permissions.canManageUsers && (
-          <div className="relative">
-            <button
-              onClick={() => setShowStatusMenu(!showStatusMenu)}
-              className={`text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 ${
-                lessonStatus === 'scheduled' ? 'bg-green-50 text-green-600 border-green-200' :
-                lessonStatus === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200' :
-                'bg-amber-50 text-amber-600 border-amber-200'
-              }`}
-            >
-              {lessonStatusInfo?.icon} {lessonStatusInfo?.label || lessonStatus}
+        <div className="flex items-center gap-2">
+          {permissions.canManageUsers && (
+            <button onClick={openEditLesson}
+              className="text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 hover:bg-[var(--tg-theme-button-color)]/10 transition-colors">
+              ✏️ Редактировать
             </button>
-            {showStatusMenu && (
-              <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-lg border z-10 overflow-hidden min-w-[140px]">
-                {LESSON_STATUSES.map(s => (
-                  <button
-                    key={s.key}
-                    onClick={() => handleStatusChange(s.key)}
-                    className={`w-full px-3 py-2.5 text-xs font-medium text-left hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                      lessonStatus === s.key ? 'bg-gray-50 font-semibold' : ''
-                    }`}
-                  >
-                    {s.icon} {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          )}
+          {permissions.canManageUsers && (
+            <div className="relative">
+              <button
+                onClick={() => setShowStatusMenu(!showStatusMenu)}
+                className={`text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 ${
+                  lessonStatus === 'scheduled' ? 'bg-green-50 text-green-600 border-green-200' :
+                  lessonStatus === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200' :
+                  'bg-amber-50 text-amber-600 border-amber-200'
+                }`}
+              >
+                {lessonStatusInfo?.icon} {lessonStatusInfo?.label || lessonStatus}
+              </button>
+              {showStatusMenu && (
+                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-lg border z-10 overflow-hidden min-w-[140px]">
+                  {LESSON_STATUSES.map(s => (
+                    <button
+                      key={s.key}
+                      onClick={() => handleStatusChange(s.key)}
+                      className={`w-full px-3 py-2.5 text-xs font-medium text-left hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                        lessonStatus === s.key ? 'bg-gray-50 font-semibold' : ''
+                      }`}
+                    >
+                      {s.icon} {s.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Lesson Hero ──────────────────────────────────────────────── */}
@@ -467,6 +570,17 @@ export default function LessonDetailPage() {
         </div>
       )}
 
+      {/* ── Lesson note section ───────────────────────────────────────── */}
+      {lessonStatus !== 'cancelled' && lesson.note && (
+        <div className="tg-card">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm">📌</span>
+            <h3 className="text-sm font-semibold">Заметка</h3>
+          </div>
+          <p className="text-sm text-[var(--tg-theme-text-color)]">{lesson.note}</p>
+        </div>
+      )}
+
       {/* ── Attendance stats bar ──────────────────────────────────────── */}
       {lessonStatus !== 'cancelled' && (
         <>
@@ -516,6 +630,8 @@ export default function LessonDetailPage() {
               const currentStatus = attendanceMap[student.id];
               const isSaving = savingStudent === student.id;
               const statusInfo = getStatusInfo(student.id);
+              const studentAchievements = achievementsMap[student.id] || [];
+              const isExpanded = expandedAchievements[student.id];
 
               return (
                 <div key={student.id}
@@ -524,18 +640,27 @@ export default function LessonDetailPage() {
                     currentStatus === 'trial' ? 'ring-1 ring-purple-200' :
                     currentStatus === 'late' ? 'ring-1 ring-amber-200' : 'ring-1 ring-red-200'
                   ) : ''}`}>
-                  <button onClick={() => navigate(`/student/${student.id}`)}
-                    className="w-full flex items-center gap-3 mb-2.5 text-left active:scale-[0.99] transition-transform">
-                    <div className="w-9 h-9 rounded-full bg-[var(--tg-theme-button-color)] flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      {student.first_name?.[0] || '?'}{student.last_name?.[0] || ''}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-[var(--tg-theme-text-color)] block truncate">{student.first_name} {student.last_name}</span>
-                      {student.phone && <span className="text-[10px] text-[var(--tg-theme-hint-color)]">{student.phone}</span>}
-                    </div>
-                    {currentStatus && !isSaving && <span className="text-[10px] text-green-500 font-medium shrink-0 ml-1">✓ {statusInfo?.label}</span>}
-                    {isSaving && <span className="text-[10px] text-[var(--tg-theme-hint-color)] animate-pulse shrink-0">···</span>}
-                  </button>
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <button onClick={() => navigate(`/student/${student.id}`)}
+                      className="w-full flex items-center gap-3 text-left active:scale-[0.99] transition-transform min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-[var(--tg-theme-button-color)] flex items-center justify-center text-xs font-bold text-white shrink-0">
+                        {student.first_name?.[0] || '?'}{student.last_name?.[0] || ''}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-[var(--tg-theme-text-color)] block truncate">{student.first_name} {student.last_name}</span>
+                        {student.phone && <span className="text-[10px] text-[var(--tg-theme-hint-color)]">{student.phone}</span>}
+                      </div>
+                      {currentStatus && !isSaving && <span className="text-[10px] text-green-500 font-medium shrink-0 ml-1">✓ {statusInfo?.label}</span>}
+                      {isSaving && <span className="text-[10px] text-[var(--tg-theme-hint-color)] animate-pulse shrink-0">···</span>}
+                    </button>
+                    {permissions.canManageUsers && (
+                      <button onClick={() => setShowAddAchievement(student.id)}
+                        className="shrink-0 w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-xs hover:bg-amber-100 transition-all active:scale-90"
+                        title="Добавить достижение">
+                        🏆
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex gap-1">
                     {STATUSES.map(({ key, label, icon, color }) => {
@@ -563,6 +688,99 @@ export default function LessonDetailPage() {
                       );
                     })}
                   </div>
+
+                  {/* ── Student achievements ──────────────────────────────── */}
+                  {studentAchievements.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-[var(--tg-theme-section-separator-color)]">
+                      <button
+                        onClick={() => setExpandedAchievements(prev => ({ ...prev, [student.id]: !prev[student.id] }))}
+                        className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--tg-theme-hint-color)] hover:text-amber-600 transition-colors">
+                        🏆 Достижения ({studentAchievements.length})
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                          className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                      {isExpanded && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {studentAchievements.map(a => (
+                            <div key={a.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-100 text-[10px] font-medium text-amber-700">
+                              <span>{a.icon}</span>
+                              <span>{a.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Add achievement modal ────────────────────────── */}
+                  {showAddAchievement === student.id && (
+                    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
+                      onClick={() => { setShowAddAchievement(null); setNewAchievement({ icon: '🏆', title: '', description: '' }); }}>
+                      <div className="w-full max-w-sm bg-[var(--tg-theme-bg-color)] rounded-3xl p-5 shadow-2xl animate-slide-up"
+                        onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-base font-semibold flex items-center gap-2">
+                            🏆 Достижение
+                            <span className="text-xs font-normal text-[var(--tg-theme-hint-color)]">
+                              {student.first_name} {student.last_name}
+                            </span>
+                          </h3>
+                          <button onClick={() => { setShowAddAchievement(null); setNewAchievement({ icon: '🏆', title: '', description: '' }); }}
+                            className="p-1 text-[var(--tg-theme-hint-color)] hover:text-[var(--tg-theme-text-color)] transition-colors">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                          </button>
+                        </div>
+
+                        {/* Icon picker */}
+                        <div className="mb-3">
+                          <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">Иконка</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ACHIEVEMENT_ICONS.map(icon => (
+                              <button key={icon} onClick={() => setNewAchievement(a => ({ ...a, icon }))}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border transition-all ${
+                                  newAchievement.icon === icon
+                                    ? 'border-amber-400 bg-amber-50 shadow-sm scale-110'
+                                    : 'border-transparent hover:bg-gray-50'
+                                }`}>
+                                {icon}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Title */}
+                        <div className="mb-3">
+                          <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">Название *</label>
+                          <input value={newAchievement.title}
+                            onChange={e => setNewAchievement(a => ({ ...a, title: e.target.value }))}
+                            placeholder="Собрал робота Горилла"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30"
+                            autoFocus />
+                        </div>
+
+                        {/* Description */}
+                        <div className="mb-4">
+                          <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">Описание (необязательно)</label>
+                          <textarea value={newAchievement.description}
+                            onChange={e => setNewAchievement(a => ({ ...a, description: e.target.value }))}
+                            placeholder="Например: самостоятельно собрал модель"
+                            className="w-full px-3 py-2 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 resize-none min-h-[50px]" />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button onClick={() => { setShowAddAchievement(null); setNewAchievement({ icon: '🏆', title: '', description: '' }); }}
+                            className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                          <button onClick={() => handleAddAchievement(student.id)}
+                            disabled={savingAchievement || !newAchievement.title.trim()}
+                            className="tg-button flex-1 text-sm disabled:opacity-50">
+                            {savingAchievement ? '⏳...' : '✅ Сохранить'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -575,10 +793,86 @@ export default function LessonDetailPage() {
         <div className="tg-card flex flex-col items-center py-8 text-center">
           <span className="text-5xl mb-3">😴</span>
           <p className="text-base font-semibold text-[var(--tg-theme-text-color)] mb-1">Занятие отменено</p>
-          <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>            {permissions.canManageUsers && (
+          <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>
+          {permissions.canManageUsers && (
             <button onClick={() => handleStatusChange('scheduled')}
               className="mt-4 tg-button text-sm">Восстановить занятие</button>
           )}
+        </div>
+      )}
+
+      {/* ── Edit Lesson Modal ─────────────────────────────────────────── */}
+      {showEditLesson && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowEditLesson(false)}>
+          <div className="w-full max-w-lg bg-[var(--tg-theme-bg-color)] rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold">✏️ Редактировать занятие</h3>
+              <button onClick={() => setShowEditLesson(false)} className="p-1 text-[var(--tg-theme-hint-color)]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Title */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Название занятия</label>
+                <input value={editDraft.title} onChange={e => setEditDraft(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Scratch"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Time */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Время</label>
+                <input value={editDraft.time} onChange={e => setEditDraft(f => ({ ...f, time: e.target.value }))}
+                  placeholder="18:30"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Location */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
+                <input value={editDraft.location} onChange={e => setEditDraft(f => ({ ...f, location: e.target.value }))}
+                  placeholder="ул. Ленина, 10"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Location link */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карту</label>
+                <input value={editDraft.location_link} onChange={e => setEditDraft(f => ({ ...f, location_link: e.target.value }))}
+                  placeholder="https://maps.google.com/..."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Homework */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📝 Домашнее задание</label>
+                <textarea value={editDraft.homework} onChange={e => setEditDraft(f => ({ ...f, homework: e.target.value }))}
+                  placeholder="Задание на следующее занятие..."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 resize-none min-h-[80px]" />
+              </div>
+
+              {/* Note */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📌 Заметка преподавателя</label>
+                <textarea value={editDraft.note} onChange={e => setEditDraft(f => ({ ...f, note: e.target.value }))}
+                  placeholder="Любые заметки о занятии..."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 resize-none min-h-[60px]" />
+                <p className="text-[10px] text-[var(--tg-theme-hint-color)]">Заметка видна только преподавателям</p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowEditLesson(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                <button onClick={handleEditLessonSave} disabled={savingEdit}
+                  className="tg-button flex-1 text-sm disabled:opacity-50">
+                  {savingEdit ? '💾 Сохранение...' : '✅ Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
