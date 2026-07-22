@@ -1274,11 +1274,11 @@ export default function LessonDetailPage() {
 
             <div className="flex gap-1 mb-4 p-0.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)]">
               <button onClick={() => setAddMode('existing')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${addMode === 'existing' ? 'bg-white text-[var(--tg-theme-text-color)] shadow-sm' : 'text-[var(--tg-theme-hint-color)]'}`}>
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${addMode === 'existing' ? 'bg-[var(--tg-theme-bg-color)] text-[var(--tg-theme-text-color)] shadow-sm' : 'text-[var(--tg-theme-hint-color)]'}`}>
                 🔍 Существующий
               </button>
               <button onClick={() => setAddMode('new')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${addMode === 'new' ? 'bg-white text-[var(--tg-theme-text-color)] shadow-sm' : 'text-[var(--tg-theme-hint-color)]'}`}>
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${addMode === 'new' ? 'bg-[var(--tg-theme-bg-color)] text-[var(--tg-theme-text-color)] shadow-sm' : 'text-[var(--tg-theme-hint-color)]'}`}>
                 ✨ Новый ученик
               </button>
             </div>

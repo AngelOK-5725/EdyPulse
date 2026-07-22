@@ -391,7 +391,7 @@ export default function CourseDetailPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-white text-[var(--tg-theme-text-color)] shadow-sm'
+                ? 'bg-[var(--tg-theme-bg-color)] text-[var(--tg-theme-text-color)] shadow-sm'
                 : 'text-[var(--tg-theme-hint-color)] hover:opacity-70'
             }`}
           >

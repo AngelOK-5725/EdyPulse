@@ -28,6 +28,7 @@ export interface Course {
   teacher_id: string;
   color: string;
   student_ids: string;
+  student_count?: number;  // Real student count from lesson attendance records
   location?: string;
   location_link?: string;
   is_active: string;

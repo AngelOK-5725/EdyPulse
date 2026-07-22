@@ -84,6 +84,9 @@ export default function CoursesPage() {
 
   // ── Helpers ──────────────────────────────────────────────────────────
   const getStudentCount = (course: Course): number => {
+    // Use real student count from attendance records (enriched by backend)
+    if (course.student_count !== undefined) return course.student_count;
+    // Fallback: legacy student_ids field
     if (!course.student_ids) return 0;
     return course.student_ids.split(',').filter(Boolean).length;
   };

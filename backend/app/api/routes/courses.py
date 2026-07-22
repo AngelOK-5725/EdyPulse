@@ -10,6 +10,7 @@ from backend.app.services.course_service import (
     list_courses, get_course, create_course, update_course, delete_course,
     enroll_student, unenroll_student,
 )
+from backend.app.services.lesson_service import get_course_student_counts
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/courses", tags=["courses"])
@@ -54,9 +55,23 @@ class CourseUpdate(BaseModel):
 
 @router.get("")
 async def api_list_courses(current_user: CurrentUser):
-    """Get all active courses."""
+    """Get all active courses with real student counts.
+
+    Student counts are computed from attendance records across all lessons,
+    NOT from the legacy `course.student_ids` field.
+    """
     courses = list_courses(telegram_id=current_user.telegram_id, role=current_user.role.value)
-    return {"courses": courses}
+    # Enrich each course with the real student count from lesson attendance
+    student_counts = get_course_student_counts(
+        telegram_id=current_user.telegram_id,
+        role=current_user.role.value
+    )
+    enriched = []
+    for c in courses:
+        cid = c.get("id", "")
+        c["student_count"] = student_counts.get(cid, 0)
+        enriched.append(c)
+    return {"courses": enriched}
 
 
 @router.get("/{course_id}")

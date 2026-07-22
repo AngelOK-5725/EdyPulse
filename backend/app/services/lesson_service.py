@@ -311,6 +311,43 @@ def enrich_lesson_with_attendance(
     }
 
 
+def get_course_student_counts(
+    telegram_id: Optional[int] = None,
+    role: Optional[str] = None
+) -> dict[str, int]:
+    """Compute unique student counts per course from attendance records.
+
+    Iterates over all attendance records and counts unique student_ids
+    per course_id. This is used by the courses list endpoint to show real
+    student counts (as opposed to the stale `course.student_ids` field).
+
+    Accepts telegram_id and role to filter attendance records by user
+    ownership for non-Owner users.
+    """
+    from backend.app.services.attendance_service import list_attendance
+
+    # Get all attendance records with user filtering (batch — no per-lesson N+1)
+    all_attendance = list_attendance(telegram_id=telegram_id, role=role)
+
+    # Group unique student_ids by course_id
+    course_student_map: dict[str, set[str]] = {}
+    for a in all_attendance:
+        course_id = a.get("course_id", "")
+        student_id = a.get("student_id", "")
+        if not course_id or not student_id:
+            continue
+        if course_id not in course_student_map:
+            course_student_map[course_id] = set()
+        course_student_map[course_id].add(student_id)
+
+    # Build result dict
+    result: dict[str, int] = {}
+    for course_id, student_ids in course_student_map.items():
+        result[course_id] = len(student_ids)
+
+    return result
+
+
 def _course_students(course_id: str, all_students: list[dict]) -> list[dict]:
     """Get students enrolled in a course from the course's student_ids."""
     from backend.app.services.course_service import get_course
