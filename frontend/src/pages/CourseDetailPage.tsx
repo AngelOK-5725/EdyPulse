@@ -526,9 +526,15 @@ export default function CourseDetailPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Место / Адрес</label>
                 <input value={groupForm.location} onChange={e => setGroupForm(f => ({ ...f, location: e.target.value }))}
-                  placeholder="ул. Московская, д. 10"
+                  placeholder="ул. Московская, д. 10, каб. 301"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карты</label>
+                <input value={groupForm.location_link} onChange={e => setGroupForm(f => ({ ...f, location_link: e.target.value }))}
+                  placeholder="https://yandex.ru/maps/..."
                   className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
               </div>
 

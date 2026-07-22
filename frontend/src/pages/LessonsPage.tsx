@@ -245,13 +245,39 @@ export default function LessonsPage() {
         return d >= startDate && d <= endDate;
       });
 
-      // ── Auto-generate missing lessons for courses on scheduled days ──
+      // ── Auto-generate missing lessons from GROUPS first, then courses ──
       // This ensures the weekly schedule shows all expected lessons
       const DAY_MAP: Record<string, number> = {
         'Вс': 0, 'Пн': 1, 'Вт': 2, 'Ср': 3, 'Чт': 4, 'Пт': 5, 'Сб': 6,
       };
 
       const ensurePromises: Promise<any>[] = [];
+
+      // First, load groups and generate lessons from them
+      let groupsData: any = null;
+      try {
+        groupsData = await api.getGroups();
+        const groups = groupsData.groups || [];
+        for (const group of groups) {
+          if (!group.days || !group.start_time) continue;
+          const groupDays = group.days.split(',').map((d: string) => d.trim());
+          for (const day of weekDays) {
+            const dayName = WEEKDAYS[day.getDay()];
+            if (groupDays.includes(dayName)) {
+              const dateStr = formatDate(day);
+              // Check if a lesson for this group+date already exists
+              const alreadyExists = weekLessons.some(l => l.group_id === group.id && l.date === dateStr);
+              if (!alreadyExists && isTeacher) {
+                ensurePromises.push(api.ensureLesson('', dateStr, group.id));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load groups for lesson generation:', e);
+      }
+
+      // Then, generate from courses as fallback (for groups not yet created)
       for (const course of coursesData.courses) {
         if (!course.days || course.is_active === 'false') continue;
         const courseDays = course.days.split(',').map((d: string) => d.trim());
@@ -261,7 +287,9 @@ export default function LessonsPage() {
             const dateStr = formatDate(day);
             // Check if a lesson for this course+date already exists
             const alreadyExists = weekLessons.some(l => l.course_id === course.id && l.date === dateStr);
-            if (!alreadyExists && isTeacher) {
+            // If there are groups for this course, skip course-based generation
+            const hasGroups = groupsData?.groups?.some((g: any) => g.course_id === course.id) || false;
+            if (!alreadyExists && !hasGroups && isTeacher) {
               ensurePromises.push(api.ensureLesson(course.id, dateStr));
             }
           }

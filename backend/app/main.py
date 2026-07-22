@@ -101,6 +101,53 @@ def _seed_demo_data():
         course_repo.create(c)
     logger.info(f"Seeded {len(courses_data)} demo courses")
 
+    # Groups
+    from backend.app.services.group_service import _get_memory_store as get_group_store
+    group_repo = get_group_store()
+    group_repo.clear()
+
+    groups_data = [
+        {
+            "id": "grp_1", "course_id": "course_1",
+            "name": "Робототехника Junior A",
+            "days": "Пн,Ср", "start_time": "17:00", "end_time": "18:30",
+            "location": "ул. Московская, д. 10", "location_link": "",
+            "teacher": "Иванова М. С.",
+            "student_ids": "student_1,student_2",
+            "is_active": "true", "created_at": now,
+        },
+        {
+            "id": "grp_2", "course_id": "course_1",
+            "name": "Робототехника Junior B",
+            "days": "Вт,Чт", "start_time": "17:00", "end_time": "18:30",
+            "location": "ул. Московская, д. 10", "location_link": "",
+            "teacher": "Иванова М. С.",
+            "student_ids": "student_1",
+            "is_active": "true", "created_at": now,
+        },
+        {
+            "id": "grp_3", "course_id": "course_2",
+            "name": "Scratch",
+            "days": "Вт,Чт", "start_time": "18:30", "end_time": "20:00",
+            "location": "ул. Московская, д. 10", "location_link": "",
+            "teacher": "Петров А. В.",
+            "student_ids": "student_3,student_4",
+            "is_active": "true", "created_at": now,
+        },
+        {
+            "id": "grp_4", "course_id": "course_3",
+            "name": "Python",
+            "days": "Пн,Ср,Пт", "start_time": "19:00", "end_time": "20:30",
+            "location": "ул. Московская, д. 10", "location_link": "",
+            "teacher": "Смирнова Е. В.",
+            "student_ids": "student_1,student_3",
+            "is_active": "true", "created_at": now,
+        },
+    ]
+    for g in groups_data:
+        group_repo.create(g)
+    logger.info(f"Seeded {len(groups_data)} demo groups")
+
     # Students
     from backend.app.services.student_service import _get_memory_store
     student_repo = _get_memory_store()

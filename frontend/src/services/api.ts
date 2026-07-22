@@ -433,8 +433,11 @@ export const api = {
     const qs = params.toString();
     return request<{ lessons: any[] }>(`/lessons${qs ? `?${qs}` : ''}`);
   },
-  ensureLesson: (courseId: string, date: string) =>
-    request<any>('/lessons/ensure', { method: 'POST', body: { course_id: courseId, date } }),
+  ensureLesson: (courseId: string, date: string, groupId?: string) =>
+    request<any>('/lessons/ensure', {
+      method: 'POST',
+      body: groupId ? { group_id: groupId, date } : { course_id: courseId, date },
+    }),
   createLesson: (data: any) => request<any>('/lessons', { method: 'POST', body: data }),
   updateLesson: (id: string, data: any) =>
     request<{ status: string }>(`/lessons/${id}`, { method: 'PUT', body: data }),

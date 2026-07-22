@@ -8,9 +8,10 @@ from typing import Optional
 from backend.app.core.security import CurrentUser, AdminOnly
 from backend.app.services.lesson_service import (
     list_lessons, get_lesson, create_lesson, update_lesson, delete_lesson,
-    ensure_lesson_for_course, enrich_lesson_with_attendance,
+    ensure_lesson_for_course, ensure_lesson_for_group, enrich_lesson_with_attendance,
 )
 from backend.app.services.course_service import get_course
+from backend.app.services.group_service import get_group
 from backend.app.services.student_service import list_students
 from backend.app.services.attendance_service import list_attendance
 
@@ -94,13 +95,23 @@ async def api_get_lesson(lesson_id: str, current_user: CurrentUser):
 
 @router.post("/ensure")
 async def api_ensure_lesson(body: LessonCreate, current_user: CurrentUser):
-    """Auto-create or get existing lesson for a course+date."""
-    if body.course_id:
+    """Auto-create or get existing lesson for a course+date or group+date."""
+    lesson = None
+
+    if body.group_id:
+        # Ensure lesson from group
+        group = get_group(body.group_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+        if not group:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        lesson = ensure_lesson_for_group(group, body.date, telegram_id=current_user.telegram_id)
+    elif body.course_id:
+        # Ensure lesson from course (legacy fallback)
         course = get_course(body.course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
         if not course:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
         lesson = ensure_lesson_for_course(course, body.date, telegram_id=current_user.telegram_id)
     else:
+        # Create from raw data
         lesson = create_lesson(body.model_dump(), telegram_id=current_user.telegram_id)
 
     if not lesson:

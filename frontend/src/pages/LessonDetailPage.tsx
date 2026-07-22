@@ -95,6 +95,10 @@ export default function LessonDetailPage() {
   const [showHomeworkEdit, setShowHomeworkEdit] = useState(false);
   const [homeworkDraft, setHomeworkDraft] = useState('');
 
+  // ── Group location state (inherited from group) ──────────────────
+  const [lessonGroupLocation, setLessonGroupLocation] = useState('');
+  const [lessonGroupLocationLink, setLessonGroupLocationLink] = useState('');
+
   // ── Group management state ──────────────────────────────────────────
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [removingStudent, setRemovingStudent] = useState<string | null>(null);
@@ -257,6 +261,19 @@ export default function LessonDetailPage() {
           setCourse(courseData);
         } catch (e) {
           console.error('Failed to load course:', e);
+        }
+      }
+
+      // Load group location if lesson belongs to a group
+      if (lessonData.group_id) {
+        try {
+          const groupData = await api.getGroup(lessonData.group_id);
+          if (groupData) {
+            setLessonGroupLocation(groupData.location || '');
+            setLessonGroupLocationLink(groupData.location_link || '');
+          }
+        } catch (e) {
+          console.error('Failed to load group location:', e);
         }
       }
 
@@ -740,8 +757,8 @@ export default function LessonDetailPage() {
   const lessonTime = getTimeDisplay(lesson);
   const lessonStartTime = lesson.start_time || lesson.time || '';
   const lessonEndTime = lesson.end_time || '';
-  const lessonLocation = lesson.location || course?.location || '';
-  const lessonLocationLink = lesson.location_link || course?.location_link || '';
+  const lessonLocation = lesson.location || lessonGroupLocation || course?.location || '';
+  const lessonLocationLink = lesson.location_link || lessonGroupLocationLink || course?.location_link || '';
   const lessonColor = course?.color || '#6C5CE7';
 
   return (
