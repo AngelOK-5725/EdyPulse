@@ -20,7 +20,11 @@ const LESSON_STATUSES = [
 const ACHIEVEMENT_ICONS = ['🏆', '🌟', '🎯', '🤖', '🎨', '⚡', '🔥', '💡', '🎵', '🏅', '📐', '🧩', '🎪', '🚀', '🌈'];
 
 function getTodayDate(): string {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // ─── Проверка пересечения временных интервалов ───────────────────────────
@@ -278,7 +282,7 @@ export default function LessonDetailPage() {
     if (!lesson) return;
     setCancelSaving(true);
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getTodayDate();
       const startTime = lesson.start_time || lesson.time || '';
       const endTime = lesson.end_time || '';
       // 1. Create a new make-up lesson for today

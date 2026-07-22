@@ -24,7 +24,7 @@ export default function AdminPaymentsPage() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
-    payment_date: new Date().toISOString().split('T')[0],
+    payment_date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
     payment_type: 'monthly' as string,
     student_id: '',
     course_id: '',

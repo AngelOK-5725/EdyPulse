@@ -306,7 +306,8 @@ export default function InboxPage() {
       originalTime: reminder.time || '',
     });
     // Default: today, same time as original
-    setRescheduleDate(new Date().toISOString().split('T')[0]);
+    const d = new Date();
+    setRescheduleDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
     setRescheduleTime(reminder.time || '');
     setRescheduleConflict(null);
     setShowRescheduleModal(true);
