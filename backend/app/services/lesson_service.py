@@ -272,9 +272,6 @@ def enrich_lesson_with_attendance(
     course = get_course(course_id) if course_id else None
     course_color = course.get("color", "#6C5CE7") if course else "#6C5CE7"
 
-    # Students enrolled in the course
-    course_students = _course_students(course_id, all_students)
-
     # Attendance for this lesson (by lesson_id or by course_id+date)
     lesson_attendance = [
         a for a in attendance_records
@@ -282,19 +279,20 @@ def enrich_lesson_with_attendance(
         or (a.get("course_id", "") == course_id and a.get("date", "") == lesson_date)
     ]
 
+    # Students shown on lesson = only those with attendance records for this lesson
+    # NOT all students enrolled in the course (different time slots = different students)
+    lesson_student_ids = {a.get("student_id") for a in lesson_attendance if a.get("student_id")}
+    course_students = [s for s in all_students if s.get("id") in lesson_student_ids]
+
     att_map = {a["student_id"]: a for a in lesson_attendance}
 
     present = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "present")
     late = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "late")
     absent = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "absent")
     trial = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "trial")
-    unmarked = len(course_students) - len(lesson_attendance)
+    unmarked = 0  # No auto-inherited unmarked students
 
-    unmarked_students = [
-        {"id": s.get("id"), "first_name": s.get("first_name", ""), "last_name": s.get("last_name", "")}
-        for s in course_students
-        if s.get("id") not in att_map
-    ]
+    unmarked_students = []
 
     return {
         **lesson,

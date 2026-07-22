@@ -197,14 +197,36 @@ export default function LessonDetailPage() {
         }
       }
 
-      // Load students enrolled in this course
-      if (lessonData.course_id) {
+      // Load attendance for this lesson's date FIRST
+      // (students shown are ONLY those with attendance records)
+      let loadedStudentIds: string[] = [];
+      try {
+        const attData = await api.getAttendance(lessonData.course_id, lessonData.date);
+        const statusMap: Record<string, string> = {};
+        const commentMap: Record<string, string> = {};
+        for (const record of attData.attendance) {
+          statusMap[record.student_id] = record.status;
+          if (record.comment) commentMap[record.student_id] = record.comment;
+        }
+        setAttendanceMap(statusMap);
+        setCommentsMap(commentMap);
+        loadedStudentIds = Object.keys(statusMap);
+      } catch (e) {
+        console.error('Failed to load attendance:', e);
+      }
+
+      // Load ONLY students who have attendance records for this lesson
+      if (loadedStudentIds.length > 0) {
         try {
-          const studentsData = await api.getStudents(lessonData.course_id);
-          setStudents(studentsData.students);
+          const studentPromises = loadedStudentIds.map(id =>
+            api.getStudent(id).catch(() => null as any)
+          );
+          const studentsData = await Promise.all(studentPromises);
+          const validStudents = studentsData.filter(Boolean);
+          setStudents(validStudents);
 
           // Load achievements for each student
-          const achPromises = studentsData.students.map(async (s: Student) => {
+          const achPromises = validStudents.map(async (s: Student) => {
             try {
               const achData = await api.getAchievements(s.id);
               return { studentId: s.id, achievements: achData.achievements };
@@ -219,21 +241,9 @@ export default function LessonDetailPage() {
         } catch (e) {
           console.error('Failed to load students:', e);
         }
-      }
-
-      // Load attendance for this lesson's date
-      try {
-        const attData = await api.getAttendance(lessonData.course_id, lessonData.date);
-        const statusMap: Record<string, string> = {};
-        const commentMap: Record<string, string> = {};
-        for (const record of attData.attendance) {
-          statusMap[record.student_id] = record.status;
-          if (record.comment) commentMap[record.student_id] = record.comment;
-        }
-        setAttendanceMap(statusMap);
-        setCommentsMap(commentMap);
-      } catch (e) {
-        console.error('Failed to load attendance:', e);
+      } else {
+        setStudents([]);
+        setAchievementsMap({});
       }
 
       setError(null);
@@ -517,24 +527,17 @@ export default function LessonDetailPage() {
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        // Refresh course data first so enrolled-student filter is up to date.
-        // Use freshCourse directly (not closure `course`) to avoid stale state.
-        let freshCourse = course;
-        if (lesson?.course_id) {
-          try {
-            freshCourse = await api.getCourse(lesson.course_id);
-            setCourse(freshCourse);
-          } catch { /* course may not exist, ignore */ }
-        }
         const data = await api.searchStudents(value);
-        const enrolledIds = new Set((freshCourse?.student_ids || '').split(',').filter(Boolean));
-        setSearchResults(data.students.filter(s => !enrolledIds.has(s.id)));
+        // Don't filter by course enrollment — show all matching students.
+        // But do filter out students already added to THIS lesson.
+        const alreadyAddedIds = new Set(Object.keys(attendanceMap));
+        setSearchResults(data.students.filter(s => !alreadyAddedIds.has(s.id)));
       } catch (e) { console.error('Search failed:', e); }
       finally { setSearching(false); }
     }, 300);
   };
 
-  // ── Enroll existing student in course + mark for this lesson ───────────
+  // ── Add existing student to this lesson (mark attendance only) ────────
   const handleEnrollExisting = async (studentId: string) => {
     if (!lesson) return;
     if (!lesson.course_id) {
@@ -543,15 +546,7 @@ export default function LessonDetailPage() {
     }
     setAddingStudent(true);
     try {
-      await api.enrollStudent(lesson.course_id, studentId);
-      // Refresh both students AND course data to keep search filter up to date
-      const [courseData, studentsData] = await Promise.all([
-        api.getCourse(lesson.course_id),
-        api.getStudents(lesson.course_id),
-      ]);
-      setCourse(courseData);
-      setStudents(studentsData.students);
-
+      // Just mark attendance — no course enrollment (different time slots = different students)
       await api.markAttendance({
         date: lesson.date,
         course_id: lesson.course_id,
@@ -563,17 +558,21 @@ export default function LessonDetailPage() {
       setAttendanceMap(prev => ({ ...prev, [studentId]: 'trial' }));
       setCommentsMap(prev => ({ ...prev, [studentId]: 'Пробное занятие' }));
 
+      // Add student to the local list immediately
+      try {
+        const studentData = await api.getStudent(studentId);
+        setStudents(prev => {
+          if (prev.some(s => s.id === studentId)) return prev;
+          return [...prev, studentData];
+        });
+      } catch { /* ignore */ }
+
       setShowAddStudent(false);
       setSearchQuery('');
       setSearchResults([]);
     } catch (e) {
       console.error('Failed to enroll student:', e);
-      const msg = e instanceof Error ? e.message : '';
-      if (msg.includes('already enrolled')) {
-        alert('⚠️ Этот ученик уже записан на этот курс.');
-      } else {
-        alert('❌ Ошибка при записи ученика. Проверьте, что курс существует.');
-      }
+      alert('❌ Ошибка при записи ученика.');
     } finally { setAddingStudent(false); }
   };
 
@@ -590,24 +589,13 @@ export default function LessonDetailPage() {
     }
     setAddingStudent(true);
     try {
-      const existingIds = course?.student_ids ? course.student_ids.split(',').filter(Boolean) : [];
       const created = await api.createStudent({
         first_name: newStudent.first_name,
         last_name: newStudent.last_name,
         phone: newStudent.phone || undefined,
-        course_ids: [...existingIds, lesson.course_id].join(','),
+        // Don't auto-enroll in the course — just mark attendance for this lesson
+        course_ids: '',
       });
-
-      // Also enroll the new student in the course (updates course.student_ids)
-      await api.enrollStudent(lesson.course_id, created.id);
-
-      // Refresh both students AND course data
-      const [courseData, studentsData] = await Promise.all([
-        api.getCourse(lesson.course_id),
-        api.getStudents(lesson.course_id),
-      ]);
-      setCourse(courseData);
-      setStudents(studentsData.students);
 
       await api.markAttendance({
         date: lesson.date,
@@ -620,12 +608,15 @@ export default function LessonDetailPage() {
       setAttendanceMap(prev => ({ ...prev, [created.id]: 'trial' }));
       setCommentsMap(prev => ({ ...prev, [created.id]: 'Пробное занятие' }));
 
+      // Add student to the local list
+      setStudents(prev => [...prev, created]);
+
       setShowAddStudent(false);
       setNewStudent({ first_name: '', last_name: '', phone: '' });
       setNewStudentErrors({});
     } catch (e) {
       console.error('Failed to add student:', e);
-      alert('❌ Ошибка при добавлении ученика. Возможно, ученик с таким именем уже существует.');
+      alert('❌ Ошибка при добавлении ученика.');
     }
     finally { setAddingStudent(false); }
   };
