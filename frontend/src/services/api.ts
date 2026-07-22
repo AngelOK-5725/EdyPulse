@@ -360,6 +360,8 @@ export const api = {
     request<AttendanceRecord>('/attendance', { method: 'POST', body: data }),
   updateAttendance: (id: string, data: Partial<AttendanceRecord>) =>
     request<{ status: string }>(`/attendance/${id}`, { method: 'PUT', body: data }),
+  deleteAttendance: (id: string) =>
+    request<{ status: string }>(`/attendance/${id}`, { method: 'DELETE' }),
 
   // Payments — journal-based
   getPayments: () =>

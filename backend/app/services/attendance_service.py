@@ -155,6 +155,28 @@ def update_attendance(attendance_id: str, data: dict, telegram_id: Optional[int]
         return False
 
 
+def delete_attendance(attendance_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> bool:
+    """Delete an attendance record. Checks ownership for non-Owner users."""
+    repo = _get_repo()
+    try:
+        existing = repo.get_by_id(attendance_id)
+        if not existing:
+            return False
+        if not is_owner_role(role or "") and telegram_id is not None:
+            user_id = get_internal_user_id(telegram_id)
+            if not user_id or existing.get("user_id", "") not in ("", user_id):
+                return False
+
+        # For Google Sheets, soft-delete if is_active column exists
+        if "is_active" in ATTENDANCE_HEADERS:
+            return repo.update(attendance_id, {"is_active": "false"})
+        # Otherwise, delete via the base repo (marks is_active=false)
+        return repo.delete(attendance_id)
+    except Exception as e:
+        logger.error(f"Failed to delete attendance {attendance_id}: {e}")
+        return False
+
+
 def list_attendance_by_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
     """Get attendance records for a lesson. Filtered by user_id for non-Owner users."""
     repo = _get_repo()

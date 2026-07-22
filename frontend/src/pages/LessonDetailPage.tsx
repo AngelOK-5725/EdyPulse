@@ -91,19 +91,9 @@ export default function LessonDetailPage() {
   const [showHomeworkEdit, setShowHomeworkEdit] = useState(false);
   const [homeworkDraft, setHomeworkDraft] = useState('');
 
-  // ── Lesson edit state ────────────────────────────────────────────────
-  const [showEditLesson, setShowEditLesson] = useState(false);
-  const [editDraft, setEditDraft] = useState({
-    title: '',
-    time: '',
-    start_time: '',
-    end_time: '',
-    location: '',
-    location_link: '',
-    homework: '',
-    note: '',
-  });
-  const [savingEdit, setSavingEdit] = useState(false);
+  // ── Group management state ──────────────────────────────────────────
+  const [showGroupManagement, setShowGroupManagement] = useState(false);
+  const [removingStudent, setRemovingStudent] = useState<string | null>(null);
 
   // ── Cancel/Reschedule modal state ────────────────────────────────────
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -412,43 +402,51 @@ export default function LessonDetailPage() {
     }
   };
 
-  // ── Lesson edit modal ────────────────────────────────────────────────
-  const openEditLesson = () => {
+  // ── Group management ────────────────────────────────────────────────
+  const openGroupManagement = () => {
     if (!lesson) return;
-    setEditDraft({
-      title: lesson.title || '',
-      time: lesson.time || '',
-      start_time: lesson.start_time || lesson.time || '',
-      end_time: lesson.end_time || '',
-      location: lesson.location || '',
-      location_link: lesson.location_link || '',
-      homework: homework,
-      note: lesson.note || '',
-    });
-    setShowEditLesson(true);
+    setShowGroupManagement(true);
   };
 
-  const handleEditLessonSave = async () => {
+  const handleRemoveStudent = async (studentId: string, attendanceRecordId?: string) => {
     if (!lesson) return;
-    setSavingEdit(true);
-    try {
-      await api.updateLesson(lesson.id, {
-        title: editDraft.title,
-        time: editDraft.start_time,
-        start_time: editDraft.start_time,
-        end_time: editDraft.end_time,
-        location: editDraft.location,
-        location_link: editDraft.location_link,
-        homework: editDraft.homework,
-        note: editDraft.note,
+
+    // Find attendance record ID for this student
+    let recordId = attendanceRecordId;
+    if (!recordId) {
+      try {
+        const attData = await api.getAttendance(lesson.course_id, lesson.date);
+        const record = attData.attendance.find(r => r.student_id === studentId && r.lesson_id === lesson.id);
+        if (record) recordId = record.id;
+      } catch { /* ignore */ }
+    }
+
+    if (!recordId) {
+      // If no record found, just remove from local state
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+      setAttendanceMap(prev => {
+        const newMap = { ...prev };
+        delete newMap[studentId];
+        return newMap;
       });
-      setLesson(prev => prev ? { ...prev, title: editDraft.title, time: editDraft.start_time, start_time: editDraft.start_time, end_time: editDraft.end_time, location: editDraft.location, location_link: editDraft.location_link, note: editDraft.note } : null);
-      setHomework(editDraft.homework);
-      setShowEditLesson(false);
+      return;
+    }
+
+    setRemovingStudent(studentId);
+    try {
+      await api.deleteAttendance(recordId);
+      // Remove from local state
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+      setAttendanceMap(prev => {
+        const newMap = { ...prev };
+        delete newMap[studentId];
+        return newMap;
+      });
     } catch (e) {
-      console.error('Failed to save lesson:', e);
+      console.error('Failed to remove student:', e);
+      alert('❌ Ошибка при удалении ученика');
     } finally {
-      setSavingEdit(false);
+      setRemovingStudent(null);
     }
   };
 
@@ -682,9 +680,9 @@ export default function LessonDetailPage() {
         </button>
         <div className="flex items-center gap-2">
           {permissions.canEditStudents && (
-            <button onClick={openEditLesson}
+            <button onClick={openGroupManagement}
               className="text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 hover:bg-[var(--tg-theme-button-color)]/10 transition-colors">
-              ✏️ Редактировать
+              👥 Группа
             </button>
           )}
           {permissions.canEditStudents && (
@@ -1041,82 +1039,80 @@ export default function LessonDetailPage() {
         </div>
       )}
 
-      {/* ── Edit Lesson Modal ─────────────────────────────────────────── */}
-      {showEditLesson && (
+      {/* ── Group Management Modal ──────────────────────────────────── */}
+      {showGroupManagement && lesson && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setShowEditLesson(false)}>
+          onClick={() => setShowGroupManagement(false)}>
           <div className="w-full max-w-lg bg-[var(--tg-theme-bg-color)] rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold">✏️ Редактировать занятие</h3>
-              <button onClick={() => setShowEditLesson(false)} className="p-1 text-[var(--tg-theme-hint-color)]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold flex items-center gap-2">👥 Управление группой</h3>
+              <button onClick={() => setShowGroupManagement(false)} className="p-1 text-[var(--tg-theme-hint-color)]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Title */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Название занятия</label>
-                <input value={editDraft.title} onChange={e => setEditDraft(f => ({ ...f, title: e.target.value }))}
-                  placeholder="Scratch"
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-              </div>
+            {/* Lesson info */}
+            <div className="mb-4 p-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)]">
+              <p className="text-sm font-semibold text-[var(--tg-theme-text-color)]">{lesson.title || course?.title || 'Занятие'}</p>
+              <p className="text-xs text-[var(--tg-theme-hint-color)] mt-0.5">
+                {lesson.date} · {getTimeDisplay(lesson)} · {students.length} {students.length === 1 ? 'ученик' : 'учеников'}
+              </p>
+            </div>
 
-              {/* Start time and End time */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🕐 Начало</label>
-                  <input type="time" value={editDraft.start_time} onChange={e => setEditDraft(f => ({ ...f, start_time: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            {/* Students list */}
+            <div className="space-y-1.5 mb-4">
+              <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">
+                Ученики на этом занятии
+              </p>
+              {students.length === 0 ? (
+                <div className="flex flex-col items-center py-6 text-center">
+                  <span className="text-3xl mb-2">👨‍🎓</span>
+                  <p className="text-sm text-[var(--tg-theme-hint-color)]">Нет учеников в группе</p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Конец</label>
-                  <input type="time" value={editDraft.end_time} onChange={e => setEditDraft(f => ({ ...f, end_time: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-                </div>
-              </div>
+              ) : (
+                students.map(student => {
+                  const isRemoving = removingStudent === student.id;
+                  const statusLabel = attendanceMap[student.id]
+                    ? STATUSES.find(s => s.key === attendanceMap[student.id])?.label || attendanceMap[student.id]
+                    : '—';
+                  return (
+                    <div key={student.id}
+                      className={`flex items-center gap-3 p-3 rounded-xl transition-all ${isRemoving ? 'opacity-50' : 'hover:bg-[var(--tg-theme-secondary-bg-color)]'}`}>
+                      <div className="w-9 h-9 rounded-full bg-[var(--tg-theme-button-color)] flex items-center justify-center text-xs font-bold text-white shrink-0">
+                        {student.first_name?.[0] || '?'}{student.last_name?.[0] || ''}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-[var(--tg-theme-text-color)] block truncate">
+                          {student.first_name} {student.last_name}
+                        </span>
+                        <span className="text-[10px] text-[var(--tg-theme-hint-color)]">
+                          {attendanceMap[student.id] ? `${STATUSES.find(s => s.key === attendanceMap[student.id])?.icon || ''} ${statusLabel}` : '📝 Не отмечен'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveStudent(student.id)}
+                        disabled={isRemoving}
+                        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-all active:scale-90 disabled:opacity-50"
+                        title="Удалить из занятия"
+                      >
+                        {isRemoving ? '⏳' : '❌ Удалить'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
 
-              {/* Location */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
-                <input value={editDraft.location} onChange={e => setEditDraft(f => ({ ...f, location: e.target.value }))}
-                  placeholder="ул. Ленина, 10"
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-              </div>
-
-              {/* Location link */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карту</label>
-                <input value={editDraft.location_link} onChange={e => setEditDraft(f => ({ ...f, location_link: e.target.value }))}
-                  placeholder="https://maps.google.com/..."
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-              </div>
-
-              {/* Homework */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📝 Домашнее задание</label>
-                <textarea value={editDraft.homework} onChange={e => setEditDraft(f => ({ ...f, homework: e.target.value }))}
-                  placeholder="Задание на следующее занятие..."
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 resize-none min-h-[80px]" />
-              </div>
-
-              {/* Note */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📌 Заметка преподавателя</label>
-                <textarea value={editDraft.note} onChange={e => setEditDraft(f => ({ ...f, note: e.target.value }))}
-                  placeholder="Любые заметки о занятии..."
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 resize-none min-h-[60px]" />
-                <p className="text-[10px] text-[var(--tg-theme-hint-color)]">Заметка видна только преподавателям</p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setShowEditLesson(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
-                <button onClick={handleEditLessonSave} disabled={savingEdit}
-                  className="tg-button flex-1 text-sm disabled:opacity-50">
-                  {savingEdit ? '💾 Сохранение...' : '✅ Сохранить'}
-                </button>
-              </div>
+            {/* Add student section */}
+            <div className="pt-3 border-t border-[var(--tg-theme-section-separator-color)]">
+              <button
+                onClick={() => { setShowGroupManagement(false); setShowAddStudent(true); }}
+                className="w-full py-3 rounded-xl text-sm font-medium text-[var(--tg-theme-button-color)] bg-[var(--tg-theme-secondary-bg-color)] hover:opacity-80 transition-opacity flex items-center justify-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Добавить ученика
+              </button>
             </div>
           </div>
         </div>

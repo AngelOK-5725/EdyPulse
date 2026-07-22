@@ -30,7 +30,7 @@ STUDENTS_HEADERS = [
 ATTENDANCE_HEADERS = [
     "id", "lesson_id", "date", "course_id", "student_id",
     "status", "comment", "marked_by", "created_at",
-    "user_id", "updated_at",
+    "user_id", "updated_at", "is_active",
 ]
 
 PAYMENTS_HEADERS = [

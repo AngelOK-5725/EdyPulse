@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type Course, type Student, type Payment } from '../services/api';
 
+const COLORS = ['#6C5CE7', '#00B894', '#FD79A8', '#FDCB6E', '#0984E3', '#E17055', '#00CEC9', '#636E72'];
+const DAYS_OPTIONS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
 function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: string }): string {
   const start = item.start_time || item.time || '';
   const end = item.end_time || '';
@@ -56,6 +59,79 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'students' | 'lessons' | 'payments'>('students');
+
+  // ── Edit course state ────────────────────────────────────────────────
+  const [showEditCourse, setShowEditCourse] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    time: '',
+    price: '',
+    monthly_price: '',
+    lesson_price: '',
+    lessons_per_week: '',
+    payment_type: '',
+    color: '#6C5CE7',
+    days: [] as string[],
+    location: '',
+    location_link: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditCourse = () => {
+    if (!course) return;
+    setEditForm({
+      title: course.title,
+      description: course.description || '',
+      time: course.time || '',
+      price: course.price || '',
+      monthly_price: course.monthly_price || '',
+      lesson_price: course.lesson_price || '',
+      lessons_per_week: course.lessons_per_week || '',
+      payment_type: course.payment_type || 'monthly',
+      color: course.color || '#6C5CE7',
+      days: course.days ? course.days.split(',').filter(Boolean) : [],
+      location: course.location || '',
+      location_link: course.location_link || '',
+    });
+    setShowEditCourse(true);
+  };
+
+  const toggleDay = (day: string) => {
+    setEditForm(f => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day],
+    }));
+  };
+
+  const handleEditCourseSave = async () => {
+    if (!course || !editForm.title.trim()) return;
+    setSavingEdit(true);
+    try {
+      await api.updateCourse(course.id, {
+        title: editForm.title,
+        description: editForm.description || undefined,
+        time: editForm.time || undefined,
+        price: editForm.price,
+        monthly_price: editForm.monthly_price || undefined,
+        lesson_price: editForm.lesson_price || undefined,
+        lessons_per_week: editForm.lessons_per_week || undefined,
+        payment_type: editForm.payment_type || undefined,
+        color: editForm.color,
+        days: editForm.days.join(','),
+        location: editForm.location || undefined,
+        location_link: editForm.location_link || undefined,
+      });
+      setShowEditCourse(false);
+      // Reload course data
+      loadCourse(course.id);
+    } catch (e) {
+      console.error('Failed to update course:', e);
+      alert('Ошибка при сохранении курса');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) {
@@ -171,6 +247,12 @@ export default function CourseDetailPage() {
           </svg>
           Назад
         </button>
+        {permissions.canEditStudents && (
+          <button onClick={openEditCourse}
+            className="text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 hover:bg-[var(--tg-theme-button-color)]/10 transition-colors">
+            ✏️ Редактировать курс
+          </button>
+        )}
       </div>
 
       {/* ── Course Hero ──────────────────────────────────────────────── */}
@@ -481,6 +563,128 @@ export default function CourseDetailPage() {
                 })}
             </>
           )}
+        </div>
+      )}
+      {/* ── Edit Course Modal ────────────────────────────────────────── */}
+      {showEditCourse && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowEditCourse(false)}>
+          <div className="w-full max-w-lg bg-[var(--tg-theme-bg-color)] rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold">✏️ Редактировать курс</h3>
+              <button onClick={() => setShowEditCourse(false)} className="p-1 text-[var(--tg-theme-hint-color)]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Title */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Название курса *</label>
+                <input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Робототехника Junior"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Описание</label>
+                <input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Основы робототехники для начинающих"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Time + Price row */}
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Время</label>
+                  <input value={editForm.time} onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
+                    placeholder="17:00"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">💰 Цена (₸)</label>
+                  <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="40000" type="number"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              {/* Tariff fields */}
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📅 Абонемент (₸)</label>
+                  <input value={editForm.monthly_price} onChange={e => setEditForm(f => ({ ...f, monthly_price: e.target.value }))}
+                    placeholder="40000" type="number"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🎫 Разовое (₸)</label>
+                  <input value={editForm.lesson_price} onChange={e => setEditForm(f => ({ ...f, lesson_price: e.target.value }))}
+                    placeholder="5000" type="number"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📋 Занятий/нед</label>
+                  <input value={editForm.lessons_per_week} onChange={e => setEditForm(f => ({ ...f, lessons_per_week: e.target.value }))}
+                    placeholder="2" type="number"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              {/* Days selector */}
+              <div>
+                <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">📅 Дни недели</p>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS_OPTIONS.map(day => (
+                    <button key={day} onClick={() => toggleDay(day)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        editForm.days.includes(day)
+                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                          : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                      }`}>
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
+                <input value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="ул. Московская, д. 10"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карты</label>
+                <input value={editForm.location_link} onChange={e => setEditForm(f => ({ ...f, location_link: e.target.value }))}
+                  placeholder="https://yandex.ru/maps/..."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Color picker */}
+              <div>
+                <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">🎨 Цвет</p>
+                <div className="flex gap-2">
+                  {COLORS.map(c => (
+                    <button key={c} onClick={() => setEditForm(f => ({ ...f, color: c }))}
+                      className={`w-8 h-8 rounded-full transition-all ${editForm.color === c ? 'ring-2 ring-offset-2 ring-[var(--tg-theme-button-color)] scale-110' : ''}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowEditCourse(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                <button onClick={handleEditCourseSave} disabled={savingEdit || !editForm.title.trim()}
+                  className="tg-button flex-1 text-sm disabled:opacity-50">
+                  {savingEdit ? '💾 Сохранение...' : '✅ Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

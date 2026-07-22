@@ -7,7 +7,7 @@ from typing import Optional
 
 from backend.app.core.security import CurrentUser
 from backend.app.services.attendance_service import (
-    list_attendance, get_student_attendance, mark_attendance, update_attendance,
+    list_attendance, get_student_attendance, mark_attendance, update_attendance, delete_attendance,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,15 @@ async def api_update_attendance(attendance_id: str, body: AttendanceUpdate, curr
     """Update an attendance record."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     success = update_attendance(attendance_id, data, telegram_id=current_user.telegram_id, role=current_user.role.value)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendance not found")
+    return {"status": "ok"}
+
+
+@router.delete("/{attendance_id}")
+async def api_delete_attendance(attendance_id: str, current_user: CurrentUser):
+    """Delete (soft-delete) an attendance record."""
+    success = delete_attendance(attendance_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendance not found")
     return {"status": "ok"}

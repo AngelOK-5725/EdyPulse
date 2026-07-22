@@ -6,7 +6,7 @@ from sheets.repositories.base import BaseRepository
 ATTENDANCE_HEADERS = [
     "id", "date", "course_id", "student_id",
     "status", "comment", "marked_by", "created_at",
-    "user_id", "updated_at",
+    "user_id", "updated_at", "is_active",
 ]
 
 
