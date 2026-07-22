@@ -60,6 +60,9 @@ export default function CourseDetailPage() {
   // ── Create Group modal state ─────────────────────────────────────────
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [savingGroup, setSavingGroup] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<GroupItem | null>(null);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [savingEditGroup, setSavingEditGroup] = useState(false);
   const [groupForm, setGroupForm] = useState({
     name: '',
     days: [] as string[],
@@ -121,16 +124,12 @@ export default function CourseDetailPage() {
       await api.updateCourse(course.id, {
         title: editForm.title,
         description: editForm.description || undefined,
-        time: editForm.time || undefined,
         price: editForm.price,
         monthly_price: editForm.monthly_price || undefined,
         lesson_price: editForm.lesson_price || undefined,
         lessons_per_week: editForm.lessons_per_week || undefined,
         payment_type: editForm.payment_type || undefined,
         color: editForm.color,
-        days: editForm.days.join(','),
-        location: editForm.location || undefined,
-        location_link: editForm.location_link || undefined,
       });
       setShowEditCourse(false);
       // Reload course data
@@ -192,6 +191,13 @@ export default function CourseDetailPage() {
     }));
   };
 
+  const toggleEditGroupDay = (day: string) => {
+    setEditGroupForm(f => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day],
+    }));
+  };
+
   const handleCreateGroup = async () => {
     if (!course || !groupForm.name.trim() || !groupForm.start_time) return;
     setSavingGroup(true);
@@ -214,6 +220,55 @@ export default function CourseDetailPage() {
       alert('Ошибка при создании группы');
     } finally {
       setSavingGroup(false);
+    }
+  };
+
+  // ── Edit Group ────────────────────────────────────────────────────
+  const [editGroupForm, setEditGroupForm] = useState({
+    name: '',
+    days: [] as string[],
+    start_time: '',
+    end_time: '',
+    location: '',
+    location_link: '',
+    teacher: '',
+  });
+
+  const openEditGroupModal = (group: GroupItem) => {
+    setEditingGroup(group);
+    setEditGroupForm({
+      name: group.name,
+      days: group.days ? group.days.split(',').filter(Boolean) : [],
+      start_time: group.start_time,
+      end_time: group.end_time,
+      location: group.location || '',
+      location_link: group.location_link || '',
+      teacher: group.teacher || '',
+    });
+    setShowEditGroupModal(true);
+  };
+
+  const handleEditGroupSave = async () => {
+    if (!editingGroup || !editGroupForm.name.trim() || !editGroupForm.start_time) return;
+    setSavingEditGroup(true);
+    try {
+      await api.updateGroup(editingGroup.id, {
+        name: editGroupForm.name,
+        days: editGroupForm.days,
+        start_time: editGroupForm.start_time,
+        end_time: editGroupForm.end_time || undefined,
+        location: editGroupForm.location || undefined,
+        location_link: editGroupForm.location_link || undefined,
+        teacher: editGroupForm.teacher || undefined,
+      });
+      setShowEditGroupModal(false);
+      setEditingGroup(null);
+      if (course) await loadCourse(course.id);
+    } catch (e) {
+      console.error('Failed to update group:', e);
+      alert('Ошибка при сохранении группы');
+    } finally {
+      setSavingEditGroup(false);
     }
   };
 
@@ -569,8 +624,7 @@ export default function CourseDetailPage() {
               const studentIds = group.student_ids ? group.student_ids.split(',').filter(Boolean) : [];
               return (
                 <div key={group.id}
-                  className="tg-card group hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98]"
-                  onClick={() => navigate(`/school/lessons?course_id=${group.course_id}&group_id=${group.id}`)}
+                  className="tg-card hover:shadow-md transition-all duration-200"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[var(--tg-theme-button-color)] to-[var(--tg-theme-button-color)]/70 flex items-center justify-center text-white text-lg shrink-0">
@@ -602,11 +656,22 @@ export default function CourseDetailPage() {
                           👨‍🏫 {group.teacher}
                         </p>
                       )}
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-[var(--tg-theme-section-separator-color)]">
+                        <button
+                          onClick={() => navigate(`/school/lessons?course_id=${group.course_id}&group_id=${group.id}`)}
+                          className="flex-1 py-1.5 rounded-lg text-[10px] font-medium bg-[var(--tg-theme-button-color)] text-white hover:opacity-90 transition-all active:scale-95"
+                        >
+                          📅 Расписание
+                        </button>
+                        <button
+                          onClick={() => openEditGroupModal(group)}
+                          className="px-3 py-1.5 rounded-lg text-[10px] font-medium border border-[var(--tg-theme-section-separator-color)] hover:bg-[var(--tg-theme-secondary-bg-color)] transition-all active:scale-95"
+                        >
+                          ✏️ Редактировать
+                        </button>
+                      </div>
                     </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                      className="text-[var(--tg-theme-hint-color)] shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
                   </div>
                 </div>
               );
@@ -674,6 +739,88 @@ export default function CourseDetailPage() {
           )}
         </div>
       )}
+      {/* ── Edit Group Modal ─────────────────────────────────────────── */}
+      {showEditGroupModal && editingGroup && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowEditGroupModal(false)}>
+          <div className="w-full max-w-lg bg-[var(--tg-theme-bg-color)] rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold">✏️ Редактировать группу</h3>
+              <button onClick={() => setShowEditGroupModal(false)} className="p-1 text-[var(--tg-theme-hint-color)]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Название группы *</label>
+                <input value={editGroupForm.name} onChange={e => setEditGroupForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Робототехника Junior A"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🕐 Начало *</label>
+                  <input type="time" value={editGroupForm.start_time} onChange={e => setEditGroupForm(f => ({ ...f, start_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Конец</label>
+                  <input type="time" value={editGroupForm.end_time} onChange={e => setEditGroupForm(f => ({ ...f, end_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">📅 Дни недели</p>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS_OPTIONS.map(day => (
+                    <button key={day} onClick={() => toggleEditGroupDay(day)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        editGroupForm.days.includes(day)
+                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                          : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                      }`}>
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Место / Адрес</label>
+                <input value={editGroupForm.location} onChange={e => setEditGroupForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="ул. Московская, д. 10, каб. 301"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карты</label>
+                <input value={editGroupForm.location_link} onChange={e => setEditGroupForm(f => ({ ...f, location_link: e.target.value }))}
+                  placeholder="https://yandex.ru/maps/..."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">👨‍🏫 Преподаватель</label>
+                <input value={editGroupForm.teacher} onChange={e => setEditGroupForm(f => ({ ...f, teacher: e.target.value }))}
+                  placeholder="Иванова М. С."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowEditGroupModal(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                <button onClick={handleEditGroupSave} disabled={savingEditGroup || !editGroupForm.name.trim() || !editGroupForm.start_time}
+                  className="tg-button flex-1 text-sm disabled:opacity-50">
+                  {savingEditGroup ? '💾 Сохранение...' : '✅ Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Edit Course Modal ────────────────────────────────────────── */}
       {showEditCourse && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-fade-in"
@@ -704,14 +851,8 @@ export default function CourseDetailPage() {
                   className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
               </div>
 
-              {/* Time + Price row */}
+              {/* Price row */}
               <div className="flex gap-3">
-                <div className="flex-1 space-y-1">
-                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Время</label>
-                  <input value={editForm.time} onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
-                    placeholder="17:00"
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-                </div>
                 <div className="flex-1 space-y-1">
                   <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">💰 Цена (₸)</label>
                   <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
@@ -740,37 +881,6 @@ export default function CourseDetailPage() {
                     placeholder="2" type="number"
                     className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
                 </div>
-              </div>
-
-              {/* Days selector */}
-              <div>
-                <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">📅 Дни недели</p>
-                <div className="flex flex-wrap gap-2">
-                  {DAYS_OPTIONS.map(day => (
-                    <button key={day} onClick={() => toggleDay(day)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                        editForm.days.includes(day)
-                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
-                          : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
-                      }`}>
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Location */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
-                <input value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
-                  placeholder="ул. Московская, д. 10"
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🔗 Ссылка на карты</label>
-                <input value={editForm.location_link} onChange={e => setEditForm(f => ({ ...f, location_link: e.target.value }))}
-                  placeholder="https://yandex.ru/maps/..."
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
               </div>
 
               {/* Color picker */}
