@@ -399,13 +399,37 @@ export const api = {
   // Inbox — daily action stream
   getInbox: () => request<InboxData>('/inbox'),
 
+  // Groups (Course → Group → Lesson)
+  getGroups: (courseId?: string) => {
+    const params = new URLSearchParams();
+    if (courseId) params.set('course_id', courseId);
+    const qs = params.toString();
+    return request<{ groups: any[] }>(`/groups${qs ? `?${qs}` : ''}`);
+  },
+  getGroup: (id: string) => request<any>(`/groups/${id}`),
+  createGroup: (data: any) => request<any>('/groups', { method: 'POST', body: data }),
+  updateGroup: (id: string, data: any) =>
+    request<{ status: string }>(`/groups/${id}`, { method: 'PUT', body: data }),
+  deleteGroup: (id: string) => request<{ status: string }>(`/groups/${id}`, { method: 'DELETE' }),
+  addStudentToGroup: (groupId: string, studentId: string) =>
+    request<{ status: string }>(`/groups/${groupId}/students`, {
+      method: 'POST', body: { student_id: studentId },
+    }),
+  removeStudentFromGroup: (groupId: string, studentId: string) =>
+    request<{ status: string }>(`/groups/${groupId}/students/${studentId}`, {
+      method: 'DELETE',
+    }),
+  getCourseGroups: (courseId: string) =>
+    request<{ groups: any[] }>(`/courses/${courseId}/groups`),
+
   // Lessons (new lesson-centric API)
   getLesson: (id: string) => request<any>(`/lessons/${id}`),
   getTodayLessons: () => request<{ lessons: any[] }>('/lessons/today'),
-  getLessons: (date?: string, courseId?: string) => {
+  getLessons: (date?: string, courseId?: string, groupId?: string) => {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
     if (courseId) params.set('course_id', courseId);
+    if (groupId) params.set('group_id', groupId);
     const qs = params.toString();
     return request<{ lessons: any[] }>(`/lessons${qs ? `?${qs}` : ''}`);
   },

@@ -37,16 +37,27 @@ SHEETS_CONFIG = {
         "start_date", "photo_url", "is_active", "created_at",
         "user_id", "updated_at",
     ],
-    "Attendance": [
-        "id", "date", "course_id", "student_id",
-        "status", "comment", "marked_by", "created_at",
+    "Lessons": [
+        "id", "course_id", "group_id", "date", "time", "start_time", "end_time", "title",
+        "status", "rescheduled_to", "homework", "location", "location_link",
+        "note", "lesson_type", "is_active", "created_at",
         "user_id", "updated_at",
+    ],
+    "Attendance": [
+        "id", "lesson_id", "date", "course_id", "student_id",
+        "status", "comment", "marked_by", "created_at",
+        "user_id", "updated_at", "is_active",
     ],
     "Payments": [
         "id", "student_id", "course_id", "amount",
         "payment_date", "next_payment_date", "status",
         "comment", "created_at",
         "user_id", "updated_at",
+    ],
+    "Groups": [
+        "id", "course_id", "name", "days", "start_time", "end_time",
+        "location", "location_link", "teacher", "student_ids",
+        "is_active", "created_at", "user_id", "updated_at",
     ],
     "Achievements": [
         "id", "student_id", "title", "icon",

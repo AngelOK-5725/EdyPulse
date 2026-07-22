@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type Course } from '../services/api';
 
@@ -28,6 +28,7 @@ function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: s
 interface LessonItem {
   id: string;
   course_id: string;
+  group_id?: string;
   date: string;
   time: string;
   start_time: string;
@@ -129,6 +130,7 @@ const STATUS_LABELS: Record<string, { label: string; icon: string; color: string
 
 export default function LessonsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { permissions } = useAuth();
   const isAdmin = permissions.canManageUsers; // admin+
   const isTeacher = permissions.canEditStudents; // user+
@@ -140,7 +142,8 @@ export default function LessonsPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // ── Фильтры ──────────────────────────────────────────────────────────────
-  const [filterCourseId, setFilterCourseId] = useState<string>('all');
+  const initialCourseIdFromUrl = new URLSearchParams(window.location.search).get('course_id');
+  const [filterCourseId, setFilterCourseId] = useState<string>(initialCourseIdFromUrl || 'all');
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()));
 
   // ── Выбранный день (фильтр)
@@ -198,6 +201,14 @@ export default function LessonsPage() {
     }
     return () => document.removeEventListener('mousedown', handleClick);
   }, [openDropdownId]);
+
+  // ── Sync filterCourseId when URL params change (SPA navigation) ────
+  useEffect(() => {
+    const courseIdFromUrl = searchParams.get('course_id');
+    if (courseIdFromUrl && courseIdFromUrl !== filterCourseId) {
+      setFilterCourseId(courseIdFromUrl);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadData();

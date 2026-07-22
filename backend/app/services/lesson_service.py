@@ -49,8 +49,10 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None,
+                 group_id: Optional[str] = None,
                  telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """List lessons, filtered by user_id for non-Owner users."""
+    """List lessons, filtered by user_id for non-Owner users.
+    Supports filtering by group_id."""
     repo = _get_repo()
     try:
         lessons = repo.get_all()
@@ -62,6 +64,8 @@ def list_lessons(date_str: Optional[str] = None, course_id: Optional[str] = None
             active = [l for l in active if l.get("date", "") == date_str]
         if course_id:
             active = [l for l in active if l.get("course_id", "") == course_id]
+        if group_id:
+            active = [l for l in active if l.get("group_id", "") == group_id]
         return sorted(active, key=lambda l: (l.get("date", ""), l.get("time", "")))
     except Exception as e:
         logger.error(f"Failed to list lessons: {e}")
@@ -96,19 +100,47 @@ def get_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optional
 def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dict]:
     """Create a lesson manually.
 
-    If telegram_id is provided, resolves the internal user_id
+    If group_id is provided, inherits time, location, and student roster
+    from the group. If telegram_id is provided, resolves the internal user_id
     and records it as the owner of this lesson record.
     """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
+
+    # If group_id is provided, inherit defaults from the group
+    group_id = data.get("group_id", "")
+    course_id = data.get("course_id", "")
+    if group_id:
+        try:
+            from backend.app.services.group_service import get_group
+            group = get_group(group_id)
+            if group:
+                # Inherit course_id from group if not specified
+                if not course_id:
+                    course_id = group.get("course_id", "")
+                # Inherit time from group if not specified
+                if not data.get("start_time") and not data.get("time"):
+                    data["start_time"] = group.get("start_time", "")
+                if not data.get("end_time"):
+                    data["end_time"] = group.get("end_time", "")
+                if not data.get("location"):
+                    data["location"] = group.get("location", "")
+                if not data.get("location_link"):
+                    data["location_link"] = group.get("location_link", "")
+                if not data.get("title"):
+                    data["title"] = group.get("name", "")
+        except Exception as e:
+            logger.warning(f"Could not inherit from group {group_id}: {e}")
+
     # Backward compatibility: if start_time is empty but time is set, use time as start_time
     time_val = data.get("time", "")
     start_time_val = data.get("start_time", "") or time_val
     end_time_val = data.get("end_time", "")
-    
+
     record = {
         "id": data.get("id", ""),
-        "course_id": data.get("course_id", ""),
+        "course_id": course_id,
+        "group_id": group_id,
         "date": data.get("date", ""),
         "time": time_val,
         "start_time": start_time_val,
@@ -166,12 +198,41 @@ def delete_lesson(lesson_id: str, telegram_id: Optional[int] = None, role: Optio
 # ─── Auto-generation ────────────────────────────────────────────────────────
 
 
-def ensure_lesson_for_course(course: dict, target_date: str, telegram_id: Optional[int] = None) -> Optional[dict]:
-    """Auto-create a Lesson if one doesn't exist for this course+date.
+def ensure_lesson_for_group(group: dict, target_date: str, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Auto-create a Lesson from a Group template.
 
-    Called when a teacher opens a lesson page or when dashboard loads.
-    Returns existing or new lesson.
-    If telegram_id is provided, it's forwarded to create_lesson for ownership recording.
+    The lesson inherits time, location from the group.
+    Called when dashboard/lessons page needs a lesson for this group+date.
+    """
+    repo = _get_repo()
+    try:
+        existing = repo.find(group_id=group.get("id", ""), date=target_date)
+        if existing:
+            return existing[0]
+
+        lesson = create_lesson({
+            "id": f"lesson_{uuid4().hex[:8]}",
+            "course_id": group.get("course_id", ""),
+            "group_id": group.get("id", ""),
+            "date": target_date,
+            "time": group.get("start_time", ""),
+            "start_time": group.get("start_time", ""),
+            "end_time": group.get("end_time", ""),
+            "title": group.get("name", ""),
+            "status": "scheduled",
+            "location": group.get("location", ""),
+            "location_link": group.get("location_link", ""),
+        }, telegram_id=telegram_id)
+        return lesson
+    except Exception as e:
+        logger.error(f"Failed to ensure lesson for group {group.get('id')} on {target_date}: {e}")
+        return None
+
+
+def ensure_lesson_for_course(course: dict, target_date: str, telegram_id: Optional[int] = None) -> Optional[dict]:
+    """Legacy: auto-create a Lesson if one doesn't exist for this course+date.
+
+    Still used as fallback when no groups exist for a course.
     """
     repo = _get_repo()
     try:
@@ -215,10 +276,9 @@ def ensure_lesson_for_course(course: dict, target_date: str, telegram_id: Option
 
 
 def ensure_today_lessons(courses: list[dict], telegram_id: Optional[int] = None) -> list[dict]:
-    """Ensure lessons exist for all courses that have class today.
+    """Ensure lessons exist for all groups (and courses as fallback) that have class today.
 
-    Returns the list of today's lessons.
-    If telegram_id is provided, it's forwarded for ownership recording on new lessons.
+    First tries to generate from groups, then falls back to courses.
     """
     today_str = date.today().isoformat()
     weekday_map = {
@@ -230,25 +290,43 @@ def ensure_today_lessons(courses: list[dict], telegram_id: Optional[int] = None)
     logger.info(f"TRACE_DASHBOARD ensure_today_lessons() — courses={len(courses)}, today={today_str}, weekday={today_weekday}")
 
     lessons = []
+
+    # First, try to generate lessons from groups
+    try:
+        from backend.app.services.group_service import list_groups
+        all_groups = list_groups(telegram_id=telegram_id)
+        logger.info(f"TRACE_DASHBOARD   groups found: {len(all_groups)}")
+        for group in all_groups:
+            days_str = group.get("days", "")
+            if not days_str:
+                continue
+            group_days = [d.strip() for d in days_str.split(",") if d.strip()]
+            if today_weekday in group_days:
+                lesson = ensure_lesson_for_group(group, today_str, telegram_id=telegram_id)
+                if lesson:
+                    lessons.append(lesson)
+    except Exception as e:
+        logger.warning(f"Could not generate lessons from groups: {e}")
+
+    # Fallback: generate from courses for lessons not already created
     for course in courses:
         days_str = course.get("days", "")
         course_id = course.get("id", "?")
         course_title = course.get("title", "?")
         if not days_str:
-            logger.info(f"TRACE_DASHBOARD   course {course_id} '{course_title}' — no days, skip")
             continue
         days = [d.strip() for d in days_str.split(",")]
-        matches = today_weekday in days
-        logger.info(f"TRACE_DASHBOARD   course {course_id} '{course_title}' — days={days}, today={today_weekday}, matches={matches}")
-        if not matches:
+        if today_weekday not in days:
+            continue
+
+        # Check if a lesson already exists for this course+date (from group generation)
+        already_exists = any(l.get("course_id") == course_id for l in lessons)
+        if already_exists:
             continue
 
         lesson = ensure_lesson_for_course(course, today_str, telegram_id=telegram_id)
         if lesson:
             lessons.append(lesson)
-            logger.info(f"TRACE_DASHBOARD     → lesson created: {lesson.get('id')}")
-        else:
-            logger.info(f"TRACE_DASHBOARD     → lesson creation FAILED")
 
     logger.info(f"TRACE_DASHBOARD ensure_today_lessons() — total lessons created: {len(lessons)}")
     return lessons
@@ -262,9 +340,14 @@ def enrich_lesson_with_attendance(
     all_students: list[dict],
     attendance_records: list[dict],
 ) -> dict:
-    """Merge attendance stats and student info into a lesson dict."""
+    """Merge attendance stats and student info into a lesson dict.
+
+    If the lesson has a group_id, the student roster is inherited from the group.
+    Students with no attendance record are shown as "unmarked".
+    """
     lesson_id = lesson.get("id", "")
     course_id = lesson.get("course_id", "")
+    group_id = lesson.get("group_id", "")
     lesson_date = lesson.get("date", "")
 
     # Get course color
@@ -272,33 +355,57 @@ def enrich_lesson_with_attendance(
     course = get_course(course_id) if course_id else None
     course_color = course.get("color", "#6C5CE7") if course else "#6C5CE7"
 
-    # Attendance for this lesson — only by lesson_id (strict group membership)
-    # course_id+date fallback removed: different time slots = different groups, no leakage
+    # Attendance for this lesson — only by lesson_id (strict isolation)
     lesson_attendance = [
         a for a in attendance_records
         if a.get("lesson_id", "") == lesson_id
     ]
-
-    # Students shown on lesson = only those with attendance records for THIS lesson.
-    # NOT all students enrolled in the course (different time slots = different groups).
-    # NOT students from other lessons on the same course+date.
-    lesson_student_ids = {a.get("student_id") for a in lesson_attendance if a.get("student_id")}
-    course_students = [s for s in all_students if s.get("id") in lesson_student_ids]
-
     att_map = {a["student_id"]: a for a in lesson_attendance}
+    marked_ids = set(att_map.keys())
 
-    present = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "present")
-    late = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "late")
-    absent = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "absent")
-    trial = sum(1 for s in course_students if att_map.get(s.get("id"), {}).get("status") == "trial")
-    unmarked = 0  # No auto-inherited unmarked students
+    # Determine expected student roster
+    roster_students: list[dict] = []
+    unmarked_students: list[dict] = []
 
-    unmarked_students = []
+    if group_id:
+        # Inherit students from group
+        try:
+            from backend.app.services.group_service import get_group
+            group = get_group(group_id)
+            if group:
+                ids_str = group.get("student_ids", "")
+                group_student_ids = [x.strip() for x in ids_str.split(",") if x.strip()] if ids_str else []
+                roster_students = [
+                    s for s in all_students
+                    if s.get("id") in group_student_ids and s.get("is_active", "true") == "true"
+                ]
+        except Exception as e:
+            logger.warning(f"Could not get group {group_id} for enrichment: {e}")
+
+    if not roster_students:
+        # Fallback: use students from attendance records
+        lesson_student_ids = {a.get("student_id") for a in lesson_attendance if a.get("student_id")}
+        roster_students = [s for s in all_students if s.get("id") in lesson_student_ids]
+
+    # Compute unmarked students (in roster but not marked)
+    for s in roster_students:
+        if s.get("id") not in marked_ids:
+            unmarked_students.append({
+                "id": s.get("id", ""),
+                "first_name": s.get("first_name", ""),
+                "last_name": s.get("last_name", ""),
+            })
+
+    present = sum(1 for s in roster_students if att_map.get(s.get("id"), {}).get("status") == "present")
+    late = sum(1 for s in roster_students if att_map.get(s.get("id"), {}).get("status") == "late")
+    absent = sum(1 for s in roster_students if att_map.get(s.get("id"), {}).get("status") == "absent")
+    trial = sum(1 for s in roster_students if att_map.get(s.get("id"), {}).get("status") == "trial")
+    unmarked = len(unmarked_students)
 
     return {
         **lesson,
         "color": course_color,
-        "student_count": len(course_students),
+        "student_count": len(roster_students),
         "attendance_stats": {
             "present": present,
             "late": late,
@@ -308,6 +415,7 @@ def enrich_lesson_with_attendance(
             "total_marked": len(lesson_attendance),
         },
         "unmarked_students": unmarked_students,
+        "group_id": group_id,
     }
 
 

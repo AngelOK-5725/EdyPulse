@@ -4,3 +4,4 @@ from .student import Student
 from .attendance import Attendance, AttendanceStatus
 from .payment import Payment, PaymentType
 from .achievement import Achievement
+from .group import Group

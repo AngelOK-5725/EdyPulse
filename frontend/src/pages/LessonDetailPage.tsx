@@ -112,10 +112,79 @@ export default function LessonDetailPage() {
   const [rescheduleConflict, setRescheduleConflict] = useState<string | null>(null);
   const [allLessons, setAllLessons] = useState<any[]>([]);
 
+  // ── Edit group modal state ─────────────────────────────────────────────
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    date: '',
+    start_time: '',
+    end_time: '',
+    title: '',
+    location: '',
+    location_link: '',
+  });
+  const [editConflict, setEditConflict] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Load all lessons once for conflict detection
   useEffect(() => {
     api.getLessons().then(d => setAllLessons(d.lessons || [])).catch(() => {});
   }, []);
+
+  // ── Conflict detection for edit modal ─────────────────────────────────
+  const checkEditConflict = (date: string, startTime: string, endTime: string) => {
+    if (!date || !startTime || !lesson) return null;
+    const conflict = allLessons.find(l => {
+      if (l.date !== date) return false;
+      if (l.status === 'cancelled') return false;
+      if (l.id === lesson.id) return false;
+      const lStart = l.start_time || l.time || '';
+      const lEnd = l.end_time || '';
+      return timesOverlap(startTime, endTime, lStart, lEnd);
+    });
+    if (conflict) {
+      const cStart = conflict.start_time || conflict.time || '';
+      const cEnd = conflict.end_time || '';
+      const conflictTime = cStart && cEnd ? `${cStart}—${cEnd}` : cStart;
+      return `⚠️ «${conflict.title || ''}» уже в этот промежуток (${conflictTime})`;
+    }
+    return null;
+  };
+
+  const openEditModal = () => {
+    if (!lesson) return;
+    setEditForm({
+      date: lesson.date,
+      start_time: lesson.start_time || lesson.time || '',
+      end_time: lesson.end_time || '',
+      title: lesson.title,
+      location: lesson.location || '',
+      location_link: lesson.location_link || '',
+    });
+    setEditConflict(null);
+    setShowEditModal(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!lesson) return;
+    setSavingEdit(true);
+    try {
+      await api.updateLesson(lesson.id, {
+        date: editForm.date,
+        start_time: editForm.start_time || undefined,
+        end_time: editForm.end_time || undefined,
+        title: editForm.title || undefined,
+        location: editForm.location || undefined,
+        location_link: editForm.location_link || undefined,
+      });
+      setShowEditModal(false);
+      await loadLesson(lesson.id);
+    } catch (e) {
+      console.error('Failed to update lesson:', e);
+      alert('❌ Ошибка при сохранении группы');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // ── Conflict detection for reschedule ─────────────────────────────────
   const checkLessonConflict = (date: string, time: string) => {
@@ -719,6 +788,12 @@ export default function LessonDetailPage() {
               )}
             </div>
           )}
+          {permissions.canManageUsers && (
+            <button onClick={openEditModal}
+              className="text-xs px-2.5 py-1 rounded-full font-medium border flex items-center gap-1 hover:bg-[var(--tg-theme-button-color)]/10 transition-colors">
+              ✏️ Группа
+            </button>
+          )}
         </div>
       </div>
 
@@ -1253,6 +1328,107 @@ export default function LessonDetailPage() {
                 disabled={rescheduleSaving || !rescheduleDate || !!rescheduleConflict}
                 className="tg-button flex-1 text-sm disabled:opacity-50">
                 {rescheduleSaving ? '⏳ Перенос...' : '✅ Перенести'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Group Modal ──────────────────────────────────────────── */}
+      {showEditModal && lesson && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => setShowEditModal(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-lg p-5 shadow-2xl animate-slide-up max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-[var(--tg-theme-text-color)]">
+                ✏️ Редактировать группу
+              </h3>
+              <button onClick={() => setShowEditModal(false)}
+                className="w-8 h-8 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-sm hover:opacity-70 transition-opacity">
+                ✕
+              </button>
+            </div>
+
+            {/* Date */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📅 Дата *</label>
+              <input type="date" value={editForm.date}
+                onChange={e => {
+                  setEditForm(f => ({ ...f, date: e.target.value }));
+                  setEditConflict(checkEditConflict(e.target.value, editForm.start_time, editForm.end_time));
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            </div>
+
+            {/* Start time & End time */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">🕐 Начало</label>
+                <input type="time" value={editForm.start_time}
+                  onChange={e => {
+                    setEditForm(f => ({ ...f, start_time: e.target.value }));
+                    setEditConflict(checkEditConflict(editForm.date, e.target.value, editForm.end_time));
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Конец</label>
+                <input type="time" value={editForm.end_time}
+                  onChange={e => {
+                    setEditForm(f => ({ ...f, end_time: e.target.value }));
+                    setEditConflict(checkEditConflict(editForm.date, editForm.start_time, e.target.value));
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+              </div>
+            </div>
+
+            {/* Conflict warning */}
+            {editConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{editConflict}</span>
+              </div>
+            )}
+
+            {/* Title */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📝 Название</label>
+              <input type="text" value={editForm.title}
+                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                placeholder={course?.title || 'Название занятия'}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            </div>
+
+            {/* Location */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📍 Адрес</label>
+              <input type="text" value={editForm.location}
+                onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
+                placeholder="ул. Московская, д. 10"
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            </div>
+
+            <div className="mb-5">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">🔗 Ссылка на карты</label>
+              <input type="text" value={editForm.location_link}
+                onChange={e => setEditForm(f => ({ ...f, location_link: e.target.value }))}
+                placeholder="https://yandex.ru/maps/..."
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            </div>
+
+            {/* Submit */}
+            <div className="flex gap-2">
+              <button onClick={() => setShowEditModal(false)}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button
+                onClick={handleEditSave}
+                disabled={savingEdit || !editForm.date || !!editConflict}
+                className="tg-button flex-1 text-sm disabled:opacity-50"
+                title={editConflict ? 'Это время уже занято другим уроком' : ''}
+              >
+                {savingEdit ? '⏳ Сохранение...' : '✅ Сохранить'}
               </button>
             </div>
           </div>

@@ -15,23 +15,20 @@ function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: s
   return start || '—';
 }
 
-interface LessonItem {
+interface GroupItem {
   id: string;
   course_id: string;
-  date: string;
-  time: string;
+  name: string;
+  days: string;
   start_time: string;
   end_time: string;
-  title: string;
-  status: string;
-  attendance_stats?: {
-    present: number;
-    late: number;
-    absent: number;
-    trial: number;
-    unmarked: number;
-    total_marked: number;
-  };
+  location: string;
+  location_link: string;
+  teacher: string;
+  student_ids: string;
+  student_count: number;
+  is_active: string;
+  students?: any[];
 }
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -54,11 +51,24 @@ export default function CourseDetailPage() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [lessons, setLessons] = useState<LessonItem[]>([]);
+  const [groups, setGroups] = useState<GroupItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'students' | 'lessons' | 'payments'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'groups' | 'payments'>('students');
+
+  // ── Create Group modal state ─────────────────────────────────────────
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [savingGroup, setSavingGroup] = useState(false);
+  const [groupForm, setGroupForm] = useState({
+    name: '',
+    days: [] as string[],
+    start_time: '',
+    end_time: '',
+    location: '',
+    location_link: '',
+    teacher: '',
+  });
 
   // ── Edit course state ────────────────────────────────────────────────
   const [showEditCourse, setShowEditCourse] = useState(false);
@@ -147,19 +157,16 @@ export default function CourseDetailPage() {
       setLoading(true);
       setError(null);
 
-      const [courseData, studentsData, lessonsData, paymentsData] = await Promise.all([
+      const [courseData, studentsData, groupsData, paymentsData] = await Promise.all([
         api.getCourse(courseId),
         api.getStudents(courseId),
-        api.getLessons(undefined, courseId).catch(() => ({ lessons: [] })),
+        api.getCourseGroups(courseId).catch(() => ({ groups: [] })),
         api.getPayments().catch(() => ({ payments: [] })),
       ]);
 
       setCourse(courseData);
       setStudents(studentsData.students || []);
-      setLessons((lessonsData.lessons || []).map((l: any) => ({
-        ...l,
-        attendance_stats: l.attendance_stats || { present: 0, late: 0, absent: 0, trial: 0, unmarked: 0, total_marked: 0 },
-      })));
+      setGroups(groupsData.groups || []);
       setPayments((paymentsData.payments || []).filter((p: Payment) => p.course_id === courseId));
     } catch (e) {
       console.error('CourseDetailPage: Failed to load course:', e);
@@ -173,22 +180,40 @@ export default function CourseDetailPage() {
 
   const studentCount = students.length;
   const activeStudents = students.filter(s => s.is_active !== 'false').length;
+  const groupCount = groups.length;
   const totalPaid = useMemo(() => {
     return payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   }, [payments]);
 
-  const recentLessons = useMemo(() => {
-    return [...lessons]
-      .sort((a, b) => b.date.localeCompare(a.date) || (b.time || '00:00').localeCompare(a.time || '00:00'))
-      .slice(0, 20);
-  }, [lessons]);
+  const toggleGroupDay = (day: string) => {
+    setGroupForm(f => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day],
+    }));
+  };
 
-  const getLessonStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'text-green-600 bg-green-50 border-green-200';
-      case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
-      case 'rescheduled': return 'text-amber-600 bg-amber-50 border-amber-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+  const handleCreateGroup = async () => {
+    if (!course || !groupForm.name.trim() || !groupForm.start_time) return;
+    setSavingGroup(true);
+    try {
+      await api.createGroup({
+        course_id: course.id,
+        name: groupForm.name,
+        days: groupForm.days,
+        start_time: groupForm.start_time,
+        end_time: groupForm.end_time,
+        location: groupForm.location || undefined,
+        location_link: groupForm.location_link || undefined,
+        teacher: groupForm.teacher || undefined,
+      });
+      setShowGroupForm(false);
+      setGroupForm({ name: '', days: [], start_time: '', end_time: '', location: '', location_link: '', teacher: '' });
+      await loadCourse(course.id);
+    } catch (e) {
+      console.error('Failed to create group:', e);
+      alert('Ошибка при создании группы');
+    } finally {
+      setSavingGroup(false);
     }
   };
 
@@ -352,8 +377,8 @@ export default function CourseDetailPage() {
           <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">Активных</p>
         </div>
         <div className="tg-card text-center py-3">
-          <span className="text-xl font-bold text-[var(--tg-theme-text-color)]">{lessons.length}</span>
-          <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">Занятий</p>
+          <span className="text-xl font-bold text-[var(--tg-theme-text-color)]">{groupCount}</span>
+          <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">Групп</p>
         </div>
         <div className="tg-card text-center py-3">
           <span className="text-xl font-bold text-green-600">{totalPaid.toLocaleString()} ₸</span>
@@ -364,10 +389,10 @@ export default function CourseDetailPage() {
       {/* ── Quick actions ────────────────────────────────────────────── */}
       <div className="flex gap-2">
         <button
-          onClick={() => navigate('/school/lessons')}
+          onClick={() => setShowGroupForm(true)}
           className="tg-button flex-1 text-sm py-3 flex items-center justify-center gap-2"
         >
-          📅 Занятия
+          ➕ Новая группа
         </button>
         {isAdmin && (
           <button
@@ -383,7 +408,7 @@ export default function CourseDetailPage() {
       <div className="flex gap-1 p-0.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)]">
         {[
           { key: 'students' as const, label: '👨‍🎓 Ученики', count: studentCount },
-          { key: 'lessons' as const, label: '📅 Занятия', count: lessons.length },
+          { key: 'groups' as const, label: '🏫 Группы', count: groupCount },
           { key: 'payments' as const, label: '💳 Оплаты', count: payments.length },
         ].map(tab => (
           <button
@@ -450,56 +475,134 @@ export default function CourseDetailPage() {
         </div>
       )}
 
-      {/* ── Tab Content: Lessons ──────────────────────────────────────── */}
-      {activeTab === 'lessons' && (
-        <div className="space-y-1.5">
-          {recentLessons.length === 0 ? (
+      {/* ── Tab Content: Groups ───────────────────────────────────────── */}
+      {activeTab === 'groups' && (
+        <div className="space-y-2">
+          {/* Create Group Form (inline) */}
+          {showGroupForm && (
+            <div className="tg-card space-y-3 animate-slide-up">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-[var(--tg-theme-text-color)]">
+                  ➕ Новая группа
+                </h3>
+                <button onClick={() => setShowGroupForm(false)}
+                  className="w-7 h-7 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-xs hover:opacity-70">✕</button>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Название группы *</label>
+                <input value={groupForm.name} onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Робототехника Junior A"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🕐 Начало *</label>
+                  <input type="time" value={groupForm.start_time} onChange={e => setGroupForm(f => ({ ...f, start_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Конец</label>
+                  <input type="time" value={groupForm.end_time} onChange={e => setGroupForm(f => ({ ...f, end_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-2">📅 Дни недели</p>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS_OPTIONS.map(day => (
+                    <button key={day} onClick={() => toggleGroupDay(day)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        groupForm.days.includes(day)
+                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                          : 'border-[var(--tg-theme-section-separator-color)] bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                      }`}>
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">📍 Адрес</label>
+                <input value={groupForm.location} onChange={e => setGroupForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="ул. Московская, д. 10"
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">👨‍🏫 Преподаватель</label>
+                <input value={groupForm.teacher} onChange={e => setGroupForm(f => ({ ...f, teacher: e.target.value }))}
+                  placeholder="Иванова М. С."
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowGroupForm(false)} className="tg-button-secondary flex-1 text-sm">Отмена</button>
+                <button onClick={handleCreateGroup}
+                  disabled={savingGroup || !groupForm.name.trim() || !groupForm.start_time}
+                  className="tg-button flex-1 text-sm disabled:opacity-50">
+                  {savingGroup ? '⏳ Создание...' : '✅ Создать группу'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {groups.length === 0 && !showGroupForm ? (
             <div className="tg-card flex flex-col items-center py-8 text-center">
-              <span className="text-4xl mb-3">📅</span>
-              <p className="text-sm text-[var(--tg-theme-hint-color)] mb-3">Пока нет занятий по этому курсу</p>
-              <button
-                onClick={() => navigate('/school/lessons')}
-                className="tg-button text-sm py-2 px-4"
-              >
-                📅 Перейти к занятиям
+              <span className="text-4xl mb-3">🏫</span>
+              <p className="text-sm text-[var(--tg-theme-hint-color)] mb-3">Пока нет групп по этому курсу</p>
+              <button onClick={() => setShowGroupForm(true)} className="tg-button text-sm py-2 px-4">
+                ➕ Создать группу
               </button>
             </div>
           ) : (
-            recentLessons.map(lesson => {
-              const statusColor = getLessonStatusColor(lesson.status);
+            groups.map(group => {
+              const studentIds = group.student_ids ? group.student_ids.split(',').filter(Boolean) : [];
               return (
-                <button
-                  key={lesson.id}
-                  onClick={() => navigate(`/lesson/${lesson.id}`)}
-                  className={`w-full text-left tg-card group hover:shadow-md transition-all duration-200 active:scale-[0.98] ${
-                    lesson.status === 'cancelled' ? 'opacity-60' : ''
-                  }`}
+                <div key={group.id}
+                  className="tg-card group hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98]"
+                  onClick={() => navigate(`/school/lessons?course_id=${group.course_id}&group_id=${group.id}`)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-center min-w-[44px]">
-                      <span className="text-sm font-bold text-[var(--tg-theme-text-color)] leading-tight">
-                        {getTimeDisplay(lesson)}
-                      </span>
-                      <span className="text-[9px] text-[var(--tg-theme-hint-color)]">{formatDate(lesson.date)}</span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[var(--tg-theme-button-color)] to-[var(--tg-theme-button-color)]/70 flex items-center justify-center text-white text-lg shrink-0">
+                      🏫
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate block">
-                        {lesson.title || course.title}
-                      </span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full inline-block mt-0.5 ${statusColor}`}>
-                        {lesson.status === 'completed' ? '✅ Проведено' :
-                         lesson.status === 'cancelled' ? '❌ Отменено' :
-                         lesson.status === 'rescheduled' ? '🔄 Перенесено' : '📋 Запланировано'}
-                      </span>
-                    </div>
-                    {lesson.attendance_stats && (
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-semibold text-green-600">{lesson.attendance_stats.present}</span>
-                        <span className="text-[9px] text-[var(--tg-theme-hint-color)]"> / {lesson.attendance_stats.total_marked || '—'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate">
+                          {group.name}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1">
+                        {group.days && (
+                          <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                            📅 {formatDays(group.days)}
+                          </span>
+                        )}
+                        {group.start_time && (
+                          <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                            ⏰ {group.start_time}{group.end_time ? `—${group.end_time}` : ''}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                          👨‍🎓 {group.student_count || studentIds.length || 0}
+                        </span>
+                      </div>
+                      {group.teacher && (
+                        <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">
+                          👨‍🏫 {group.teacher}
+                        </p>
+                      )}
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      className="text-[var(--tg-theme-hint-color)] shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
                   </div>
-                </button>
+                </div>
               );
             })
           )}

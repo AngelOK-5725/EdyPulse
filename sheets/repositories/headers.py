@@ -46,8 +46,14 @@ ACHIEVEMENTS_HEADERS = [
     "user_id", "updated_at",
 ]
 
+GROUPS_HEADERS = [
+    "id", "course_id", "name", "days", "start_time", "end_time",
+    "location", "location_link", "teacher", "student_ids",
+    "is_active", "created_at", "user_id", "updated_at",
+]
+
 LESSONS_HEADERS = [
-    "id", "course_id", "date", "time", "start_time", "end_time", "title",
+    "id", "course_id", "group_id", "date", "time", "start_time", "end_time", "title",
     "status", "rescheduled_to", "homework", "location", "location_link",
     "note", "lesson_type", "is_active", "created_at",
     "user_id", "updated_at",

@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/lessons", tags=["lessons"])
 
 class LessonCreate(BaseModel):
     course_id: str = ""
+    group_id: str = ""
     date: str
     time: str = ""
     start_time: str = ""
@@ -35,6 +36,7 @@ class LessonUpdate(BaseModel):
     time: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    date: Optional[str] = None
     title: Optional[str] = None
     status: Optional[str] = None
     homework: Optional[str] = None
@@ -43,6 +45,8 @@ class LessonUpdate(BaseModel):
     note: Optional[str] = None
     rescheduled_to: Optional[str] = None
     lesson_type: Optional[str] = None
+    course_id: Optional[str] = None
+    group_id: Optional[str] = None
 
 
 @router.get("")
@@ -50,9 +54,10 @@ async def api_list_lessons(
     current_user: CurrentUser,
     date: Optional[str] = Query(None),
     course_id: Optional[str] = Query(None),
+    group_id: Optional[str] = Query(None),
 ):
-    """Get lessons, optionally filtered by date and/or course."""
-    lessons = list_lessons(date, course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+    """Get lessons, optionally filtered by date, course, and/or group."""
+    lessons = list_lessons(date, course_id, group_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     # Enrich with attendance data
     all_students = list_students(telegram_id=current_user.telegram_id, role=current_user.role.value)
     all_attendance = list_attendance(date=date, telegram_id=current_user.telegram_id, role=current_user.role.value)

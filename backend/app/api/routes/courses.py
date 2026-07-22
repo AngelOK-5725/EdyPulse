@@ -11,6 +11,7 @@ from backend.app.services.course_service import (
     enroll_student, unenroll_student,
 )
 from backend.app.services.lesson_service import get_course_student_counts
+from backend.app.services.group_service import list_groups
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/courses", tags=["courses"])
@@ -111,6 +112,25 @@ async def api_delete_course(course_id: str, admin: AdminOnly):
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return {"status": "ok"}
+
+
+@router.get("/{course_id}/groups")
+async def api_course_groups(course_id: str, current_user: CurrentUser):
+    """Get all groups belonging to a course."""
+    groups = list_groups(
+        course_id=course_id,
+        active_only=True,
+        telegram_id=current_user.telegram_id,
+        role=current_user.role.value,
+    )
+    # Enrich with student count
+    enriched = []
+    for g in groups:
+        student_ids_str = g.get("student_ids", "")
+        student_ids = [s.strip() for s in student_ids_str.split(",") if s.strip()] if student_ids_str else []
+        g["student_count"] = len(student_ids)
+        enriched.append(g)
+    return {"groups": enriched}
 
 
 class EnrollRequest(BaseModel):

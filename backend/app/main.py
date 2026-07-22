@@ -15,6 +15,7 @@ from backend.app.api.routes.dashboard import router as dashboard_router
 from backend.app.api.routes.system import router as system_router
 from backend.app.api.routes.lessons import router as lessons_router
 from backend.app.api.routes.inbox import router as inbox_router
+from backend.app.api.routes.groups import router as groups_router
 
 from backend.app.core.config import settings
 
@@ -47,6 +48,7 @@ app.include_router(dashboard_router)
 app.include_router(system_router)
 app.include_router(lessons_router)
 app.include_router(inbox_router)
+app.include_router(groups_router)
 
 
 # ─── Lifecycle Events ──────────────────────────────────────────────────────
