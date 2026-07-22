@@ -623,55 +623,48 @@ export default function CourseDetailPage() {
             groups.map(group => {
               const studentIds = group.student_ids ? group.student_ids.split(',').filter(Boolean) : [];
               return (
-                <div key={group.id}
-                  className="tg-card hover:shadow-md transition-all duration-200"
-                >
+                <div key={group.id} className="tg-card hover:shadow-md transition-all duration-200">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[var(--tg-theme-button-color)] to-[var(--tg-theme-button-color)]/70 flex items-center justify-center text-white text-lg shrink-0">
-                      🏫
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate">
+                    <button
+                      onClick={() => navigate(`/school/lessons?course_id=${group.course_id}&group_id=${group.id}`)}
+                      className="flex items-start gap-3 flex-1 min-w-0 text-left active:scale-[0.98] transition-transform"
+                    >
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[var(--tg-theme-button-color)] to-[var(--tg-theme-button-color)]/70 flex items-center justify-center text-white text-lg shrink-0">
+                        🏫
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-semibold text-[var(--tg-theme-text-color)] truncate block">
                           {group.name}
                         </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1">
-                        {group.days && (
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1">
+                          {group.days && (
+                            <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                              📅 {formatDays(group.days)}
+                            </span>
+                          )}
+                          {group.start_time && (
+                            <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
+                              ⏰ {group.start_time}{group.end_time ? `—${group.end_time}` : ''}
+                            </span>
+                          )}
                           <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                            📅 {formatDays(group.days)}
+                            👨‍🎓 {group.student_count || studentIds.length || 0}
                           </span>
+                        </div>
+                        {group.teacher && (
+                          <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">
+                            👨‍🏫 {group.teacher}
+                          </p>
                         )}
-                        {group.start_time && (
-                          <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                            ⏰ {group.start_time}{group.end_time ? `—${group.end_time}` : ''}
-                          </span>
-                        )}
-                        <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                          👨‍🎓 {group.student_count || studentIds.length || 0}
-                        </span>
                       </div>
-                      {group.teacher && (
-                        <p className="text-[10px] text-[var(--tg-theme-hint-color)] mt-0.5">
-                          👨‍🏫 {group.teacher}
-                        </p>
-                      )}
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-[var(--tg-theme-section-separator-color)]">
-                        <button
-                          onClick={() => navigate(`/school/lessons?course_id=${group.course_id}&group_id=${group.id}`)}
-                          className="flex-1 py-1.5 rounded-lg text-[10px] font-medium bg-[var(--tg-theme-button-color)] text-white hover:opacity-90 transition-all active:scale-95"
-                        >
-                          📅 Расписание
-                        </button>
-                        <button
-                          onClick={() => openEditGroupModal(group)}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-medium border border-[var(--tg-theme-section-separator-color)] hover:bg-[var(--tg-theme-secondary-bg-color)] transition-all active:scale-95"
-                        >
-                          ✏️ Редактировать
-                        </button>
-                      </div>
-                    </div>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEditGroupModal(group); }}
+                      className="shrink-0 mt-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border border-[var(--tg-theme-section-separator-color)] hover:bg-[var(--tg-theme-secondary-bg-color)] transition-all active:scale-90"
+                      title="Редактировать группу"
+                    >
+                      ✏️
+                    </button>
                   </div>
                 </div>
               );

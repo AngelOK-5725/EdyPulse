@@ -363,16 +363,24 @@ def enrich_lesson_with_attendance(
     att_map = {a["student_id"]: a for a in lesson_attendance}
     marked_ids = set(att_map.keys())
 
-    # Determine expected student roster
+    # Determine expected student roster + override title/location from group
     roster_students: list[dict] = []
     unmarked_students: list[dict] = []
+    group_title = lesson.get("title", "")
+    group_location = lesson.get("location", "")
+    group_location_link = lesson.get("location_link", "")
 
     if group_id:
-        # Inherit students from group
         try:
             from backend.app.services.group_service import get_group
             group = get_group(group_id)
             if group:
+                # Override title and location with CURRENT group data
+                group_title = group.get("name", "") or group_title
+                group_location = group.get("location", "") or group_location
+                group_location_link = group.get("location_link", "") or group_location_link
+
+                # Inherit students from group roster
                 ids_str = group.get("student_ids", "")
                 group_student_ids = [x.strip() for x in ids_str.split(",") if x.strip()] if ids_str else []
                 roster_students = [
@@ -404,6 +412,9 @@ def enrich_lesson_with_attendance(
 
     return {
         **lesson,
+        "title": group_title,          # override with current group name
+        "location": group_location,    # override with current group location
+        "location_link": group_location_link,
         "color": course_color,
         "student_count": len(roster_students),
         "attendance_stats": {
