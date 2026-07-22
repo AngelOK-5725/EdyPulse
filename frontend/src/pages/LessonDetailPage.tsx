@@ -23,6 +23,16 @@ function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+// ─── Проверка пересечения временных интервалов ───────────────────────────
+function timesOverlap(
+  start1: string, end1: string,
+  start2: string, end2: string
+): boolean {
+  if (!start1 || !start2) return false;
+  if (!end1 || !end2) return start1 === start2;
+  return start1 < end2 && end1 > start2;
+}
+
 // ─── Вспомогательная функция для отображения времени ──────────────────────
 function getTimeDisplay(lesson: { start_time?: string; end_time?: string; time?: string }): string {
   const startTime = lesson.start_time || lesson.time || '';
@@ -106,6 +116,36 @@ export default function LessonDetailPage() {
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleSaving, setRescheduleSaving] = useState(false);
   const [rescheduleConflict, setRescheduleConflict] = useState<string | null>(null);
+  const [allLessons, setAllLessons] = useState<any[]>([]);
+
+  // Load all lessons once for conflict detection
+  useEffect(() => {
+    api.getLessons().then(d => setAllLessons(d.lessons || [])).catch(() => {});
+  }, []);
+
+  // ── Conflict detection for reschedule ─────────────────────────────────
+  const checkLessonConflict = (date: string, time: string) => {
+    if (!date || !time || !lesson) {
+      setRescheduleConflict(null);
+      return;
+    }
+    const conflict = allLessons.find(l => {
+      if (l.date !== date) return false;
+      if (l.status === 'cancelled') return false;
+      if (l.id === lesson.id) return false;
+      const lStart = l.start_time || l.time || '';
+      const lEnd = l.end_time || '';
+      return timesOverlap(time, lesson.end_time || '', lStart, lEnd);
+    });
+    if (conflict) {
+      const cStart = conflict.start_time || conflict.time || '';
+      const cEnd = conflict.end_time || '';
+      const conflictTime = cStart && cEnd ? `${cStart}—${cEnd}` : cStart;
+      setRescheduleConflict(`⚠️ «${conflict.title || ''}» уже в этот промежуток (${conflictTime})`);
+    } else {
+      setRescheduleConflict(null);
+    }
+  };
 
   // ── Student achievements state ───────────────────────────────────────
   const [achievementsMap, setAchievementsMap] = useState<Record<string, Achievement[]>>({});
@@ -477,8 +517,17 @@ export default function LessonDetailPage() {
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
+        // Refresh course data first so enrolled-student filter is up to date.
+        // Use freshCourse directly (not closure `course`) to avoid stale state.
+        let freshCourse = course;
+        if (lesson?.course_id) {
+          try {
+            freshCourse = await api.getCourse(lesson.course_id);
+            setCourse(freshCourse);
+          } catch { /* course may not exist, ignore */ }
+        }
         const data = await api.searchStudents(value);
-        const enrolledIds = new Set((course?.student_ids || '').split(',').filter(Boolean));
+        const enrolledIds = new Set((freshCourse?.student_ids || '').split(',').filter(Boolean));
         setSearchResults(data.students.filter(s => !enrolledIds.has(s.id)));
       } catch (e) { console.error('Search failed:', e); }
       finally { setSearching(false); }
@@ -487,11 +536,20 @@ export default function LessonDetailPage() {
 
   // ── Enroll existing student in course + mark for this lesson ───────────
   const handleEnrollExisting = async (studentId: string) => {
-    if (!lesson || !lesson.course_id) return;
+    if (!lesson) return;
+    if (!lesson.course_id) {
+      alert('❌ У этого занятия нет курса. Чтобы записать ученика, сначала привяжите занятие к курсу через редактирование.');
+      return;
+    }
     setAddingStudent(true);
     try {
       await api.enrollStudent(lesson.course_id, studentId);
-      const [studentsData] = await Promise.all([api.getStudents(lesson.course_id)]);
+      // Refresh both students AND course data to keep search filter up to date
+      const [courseData, studentsData] = await Promise.all([
+        api.getCourse(lesson.course_id),
+        api.getStudents(lesson.course_id),
+      ]);
+      setCourse(courseData);
       setStudents(studentsData.students);
 
       await api.markAttendance({
@@ -510,7 +568,12 @@ export default function LessonDetailPage() {
       setSearchResults([]);
     } catch (e) {
       console.error('Failed to enroll student:', e);
-      alert('Ошибка при записи ученика');
+      const msg = e instanceof Error ? e.message : '';
+      if (msg.includes('already enrolled')) {
+        alert('⚠️ Этот ученик уже записан на этот курс.');
+      } else {
+        alert('❌ Ошибка при записи ученика. Проверьте, что курс существует.');
+      }
     } finally { setAddingStudent(false); }
   };
 
@@ -520,7 +583,11 @@ export default function LessonDetailPage() {
     setNewStudentErrors(errors);
     if (hasErrors(errors)) return;
 
-    if (!lesson || !lesson.course_id) return;
+    if (!lesson) return;
+    if (!lesson.course_id) {
+      alert('❌ У этого занятия нет курса. Чтобы добавить ученика, сначала привяжите занятие к курсу через редактирование.');
+      return;
+    }
     setAddingStudent(true);
     try {
       const existingIds = course?.student_ids ? course.student_ids.split(',').filter(Boolean) : [];
@@ -531,7 +598,15 @@ export default function LessonDetailPage() {
         course_ids: [...existingIds, lesson.course_id].join(','),
       });
 
-      const [studentsData] = await Promise.all([api.getStudents(lesson.course_id)]);
+      // Also enroll the new student in the course (updates course.student_ids)
+      await api.enrollStudent(lesson.course_id, created.id);
+
+      // Refresh both students AND course data
+      const [courseData, studentsData] = await Promise.all([
+        api.getCourse(lesson.course_id),
+        api.getStudents(lesson.course_id),
+      ]);
+      setCourse(courseData);
       setStudents(studentsData.students);
 
       await api.markAttendance({
@@ -548,7 +623,10 @@ export default function LessonDetailPage() {
       setShowAddStudent(false);
       setNewStudent({ first_name: '', last_name: '', phone: '' });
       setNewStudentErrors({});
-    } catch (e) { console.error('Failed to add student:', e); }
+    } catch (e) {
+      console.error('Failed to add student:', e);
+      alert('❌ Ошибка при добавлении ученика. Возможно, ученик с таким именем уже существует.');
+    }
     finally { setAddingStudent(false); }
   };
 
@@ -1152,22 +1230,35 @@ export default function LessonDetailPage() {
             <div className="mb-3">
               <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📆 Новая дата *</label>
               <input type="date" value={rescheduleDate}
-                onChange={e => setRescheduleDate(e.target.value)}
+                onChange={e => {
+                  setRescheduleDate(e.target.value);
+                  checkLessonConflict(e.target.value, rescheduleTime);
+                }}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
             </div>
 
             <div className="mb-4">
               <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Новое время</label>
               <input type="time" value={rescheduleTime}
-                onChange={e => setRescheduleTime(e.target.value)}
+                onChange={e => {
+                  setRescheduleTime(e.target.value);
+                  checkLessonConflict(rescheduleDate, e.target.value);
+                }}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
             </div>
+
+            {rescheduleConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{rescheduleConflict}</span>
+              </div>
+            )}
 
             <div className="flex gap-2">
               <button onClick={() => setShowRescheduleModal(false)}
                 className="tg-button-secondary flex-1 text-sm">Отмена</button>
               <button onClick={handleRescheduleConfirm}
-                disabled={rescheduleSaving || !rescheduleDate}
+                disabled={rescheduleSaving || !rescheduleDate || !!rescheduleConflict}
                 className="tg-button flex-1 text-sm disabled:opacity-50">
                 {rescheduleSaving ? '⏳ Перенос...' : '✅ Перенести'}
               </button>

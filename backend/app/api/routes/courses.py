@@ -107,6 +107,16 @@ async def api_enroll_student(course_id: str, body: EnrollRequest, current_user: 
     """Enroll an existing student in this course."""
     success = enroll_student(course_id, body.student_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
+        # Service returns False for: course/student not found, or already enrolled.
+        # Check if the student is actually already in the course.
+        course = get_course(course_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+        if course:
+            enrolled_ids = [x.strip() for x in course.get("student_ids", "").split(",") if x.strip()]
+            if body.student_id in enrolled_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Student is already enrolled in this course",
+                )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course or student not found",

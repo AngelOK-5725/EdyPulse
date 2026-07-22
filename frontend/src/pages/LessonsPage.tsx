@@ -3,7 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type Course } from '../services/api';
 
-// ─── Вспомогательные типы ──────────────────────────────────────────────────
+// ─── Вспомогательные функции ──────────────────────────────────────────────
+
+/** Проверка пересечения двух временных интервалов [start,end).
+ *  Если end_time не указан — fallback на точное совпадение start_time. */
+function timesOverlap(
+  start1: string, end1: string,
+  start2: string, end2: string
+): boolean {
+  if (!start1 || !start2) return false;
+  if (!end1 || !end2) return start1 === start2;
+  return start1 < end2 && end1 > start2;
+}
 
 function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: string }): string {
   const start = item.start_time || item.time || '';
@@ -162,6 +173,9 @@ export default function LessonsPage() {
 
   // ── Dropdown menu state
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // ── Form conflict state
+  const [formConflict, setFormConflict] = useState<string | null>(null);
 
   // ── Make-up picker state
   const [showMakeUpPicker, setShowMakeUpPicker] = useState(false);
@@ -342,6 +356,7 @@ export default function LessonsPage() {
   // ── Form handlers ────────────────────────────────────────────────────────
   const openCreateForm = (presetDate?: string) => {
     setEditingLesson(null);
+    setFormConflict(null);
     setForm({
       course_id: '',
       date: presetDate || selectedDate || getTodayString(),
@@ -359,6 +374,7 @@ export default function LessonsPage() {
 
   const openEditForm = (lesson: LessonItem) => {
     setEditingLesson(lesson);
+    setFormConflict(null);
     setForm({
       course_id: lesson.course_id,
       date: lesson.date,
@@ -377,6 +393,7 @@ export default function LessonsPage() {
   const closeForm = () => {
     setShowForm(false);
     setEditingLesson(null);
+    setFormConflict(null);
   };
 
   // ── Create ───────────────────────────────────────────────────────────────
@@ -473,19 +490,25 @@ export default function LessonsPage() {
     return lesson.attendance_stats?.total_marked ?? 0;
   };
 
-  // ── Conflict detection helper ──────────────────────────────────────────
-  const checkLessonConflict = (date: string, time: string, excludeId?: string) => {
-    if (!date || !time) return null;
-    const conflict = lessons.find(l =>
-      l.date === date &&
-      (l.start_time === time || l.time === time) &&
-      l.status !== 'cancelled' &&
-      l.id !== excludeId &&
-      l.id !== editingLesson?.id
-    );
+  // ── Conflict detection helper (ПРОВЕРЯЕТ ПЕРЕСЕЧЕНИЕ ИНТЕРВАЛОВ) ─────
+  const checkLessonConflict = (date: string, start_time: string, end_time: string, excludeId?: string) => {
+    if (!date || !start_time) return null;
+    const conflict = lessons.find(l => {
+      if (l.date !== date) return false;
+      if (l.status === 'cancelled') return false;
+      if (l.id === excludeId) return false;
+      if (l.id === editingLesson?.id) return false;
+      // Проверяем пересечение интервалов
+      const lStart = l.start_time || l.time || '';
+      const lEnd = l.end_time || '';
+      return timesOverlap(start_time, end_time, lStart, lEnd);
+    });
     if (conflict) {
       const courseTitle = getCourseTitle(conflict.course_id);
-      return `⚠️ Уже есть занятие «${conflict.title || courseTitle}» на ${date} в ${time}`;
+      const cStart = conflict.start_time || conflict.time || '';
+      const cEnd = conflict.end_time || '';
+      const conflictTime = cStart && cEnd ? `${cStart}—${cEnd}` : cStart;
+      return `⚠️ «${conflict.title || courseTitle}» уже в этот промежуток (${conflictTime})`;
     }
     return null;
   };
@@ -825,7 +848,10 @@ export default function LessonsPage() {
             <div className="mb-4">
               <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📅 Дата *</label>
               <input type="date" value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                onChange={e => {
+                  setForm(f => ({ ...f, date: e.target.value }));
+                  setFormConflict(checkLessonConflict(e.target.value, form.start_time, form.end_time, editingLesson?.id));
+                }}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
             </div>
 
@@ -834,16 +860,32 @@ export default function LessonsPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">🕐 Начало</label>
                 <input type="time" value={form.start_time}
-                  onChange={e => setForm(f => ({ ...f, start_time: e.target.value, time: e.target.value }))}
+                  onChange={e => {
+                    const newStart = e.target.value;
+                    setForm(f => ({ ...f, start_time: newStart, time: newStart }));
+                    setFormConflict(checkLessonConflict(form.date, newStart, form.end_time, editingLesson?.id));
+                  }}
                   className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Конец</label>
                 <input type="time" value={form.end_time}
-                  onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
+                  onChange={e => {
+                    const newEnd = e.target.value;
+                    setForm(f => ({ ...f, end_time: newEnd }));
+                    setFormConflict(checkLessonConflict(form.date, form.start_time, newEnd, editingLesson?.id));
+                  }}
                   className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
               </div>
             </div>
+
+            {/* Conflict warning */}
+            {formConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{formConflict}</span>
+              </div>
+            )}
 
             {/* Title — обязательно, если не выбран курс */}
             <div className="mb-4">
@@ -885,8 +927,9 @@ export default function LessonsPage() {
                 className="tg-button-secondary flex-1 text-sm">Отмена</button>
               <button
                 onClick={editingLesson ? handleUpdate : handleCreate}
-                disabled={saving || !form.date || (!form.course_id && !form.title)}
+                disabled={saving || !form.date || (!form.course_id && !form.title) || !!formConflict}
                 className="tg-button flex-1 text-sm disabled:opacity-50"
+                title={formConflict ? 'Это время уже занято другим уроком' : ''}
               >
                 {saving ? '⏳ Сохранение...' : editingLesson ? '✓ Сохранить' : '✓ Создать'}
               </button>
@@ -1081,7 +1124,7 @@ export default function LessonsPage() {
               <input type="date" value={rescheduleDate}
                 onChange={e => {
                   setRescheduleDate(e.target.value);
-                  setRescheduleConflict(checkLessonConflict(e.target.value, rescheduleTime, editingLesson.id));
+                  setRescheduleConflict(checkLessonConflict(e.target.value, rescheduleTime, editingLesson.end_time || '', editingLesson.id));
                 }}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
             </div>
@@ -1091,7 +1134,7 @@ export default function LessonsPage() {
               <input type="time" value={rescheduleTime}
                 onChange={e => {
                   setRescheduleTime(e.target.value);
-                  setRescheduleConflict(checkLessonConflict(rescheduleDate, e.target.value, editingLesson.id));
+                  setRescheduleConflict(checkLessonConflict(rescheduleDate, e.target.value, editingLesson.end_time || '', editingLesson.id));
                 }}
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
             </div>

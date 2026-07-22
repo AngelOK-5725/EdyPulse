@@ -173,7 +173,9 @@ def enroll_student(course_id: str, student_id: str, telegram_id: Optional[int] =
         current_student_ids.append(student_id)
         course_ok = update_course(course_id, {"student_ids": ",".join(current_student_ids)}, telegram_id, role)
     else:
-        course_ok = True
+        # Student already enrolled — reject duplicate
+        logger.warning(f"Student {student_id} already enrolled in course {course_id}")
+        return False
 
     # Update student.course_ids
     current_course_ids = _parse_ids(student.get("course_ids", ""))

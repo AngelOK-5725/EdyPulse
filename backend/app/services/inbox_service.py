@@ -29,6 +29,17 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
     today_attendance = list_attendance(date=today_str, telegram_id=telegram_id, role=role)
     today_lessons = ensure_today_lessons(courses, telegram_id=telegram_id)
 
+    # ── Also fetch manually created one-time / make-up lessons for today ──
+    # ensure_today_lessons only creates lessons for courses whose weekday
+    # matches today.  One-time (разовые) lessons created via the UI are
+    # missed.  We merge them here, deduplicating by lesson id.
+    manual_today = list_lessons(date=today_str, telegram_id=telegram_id, role=role)
+    seen_ids = {l.get("id") for l in today_lessons if l.get("id")}
+    for ml in manual_today:
+        if ml.get("id") not in seen_ids:
+            today_lessons.append(ml)
+            seen_ids.add(ml.get("id"))
+
     # Pre-load all attendance records grouped by student_id to avoid N+1
     all_attendance = list_attendance(telegram_id=telegram_id, role=role)
     student_attendance_map: dict[str, list[dict]] = {}

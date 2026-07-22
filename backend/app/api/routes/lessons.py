@@ -106,9 +106,58 @@ async def api_ensure_lesson(body: LessonCreate, current_user: CurrentUser):
     return enrich_lesson_with_attendance(lesson, all_students, all_attendance)
 
 
+def _times_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
+    """Check if two time intervals [start, end) overlap."""
+    if not start1 or not start2:
+        return False
+    if not end1 or not end2:
+        return start1 == start2
+    return start1 < end2 and end1 > start2
+
+
+def _find_time_conflict(
+    date: str, start_time: str, end_time: str,
+    exclude_id: str,
+    telegram_id: Optional[int] = None,
+    role: Optional[str] = None,
+) -> Optional[dict]:
+    """Find a non-cancelled lesson on the same date whose time interval
+    overlaps with the given [start_time, end_time)."""
+    if not date or not start_time:
+        return None
+    all_lessons = list_lessons(date_str=date, telegram_id=telegram_id, role=role)
+    for lesson in all_lessons:
+        if lesson.get("status") == "cancelled":
+            continue
+        if lesson.get("id") == exclude_id:
+            continue
+        l_start = lesson.get("start_time", "") or lesson.get("time", "")
+        l_end = lesson.get("end_time", "")
+        if _times_overlap(start_time, end_time, l_start, l_end):
+            return lesson
+    return None
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def api_create_lesson(body: LessonCreate, current_user: CurrentUser):
     """Create a one-off lesson manually."""
+    # Check for time conflicts
+    conflict = _find_time_conflict(
+        body.date, body.start_time or body.time, body.end_time,
+        exclude_id="",
+        telegram_id=current_user.telegram_id,
+        role=current_user.role.value,
+    )
+    if conflict:
+        c_title = conflict.get("title", "") or "Занятие"
+        c_start = conflict.get("start_time", "") or conflict.get("time", "")
+        c_end = conflict.get("end_time", "")
+        c_time = f"{c_start}—{c_end}" if c_start and c_end else c_start
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Time conflict with «{c_title}» ({c_time})",
+        )
+
     result = create_lesson(body.model_dump(), telegram_id=current_user.telegram_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create lesson")
@@ -121,6 +170,29 @@ async def api_create_lesson(body: LessonCreate, current_user: CurrentUser):
 async def api_update_lesson(lesson_id: str, body: LessonUpdate, current_user: CurrentUser):
     """Update a lesson (status, homework, etc.)."""
     data = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    # Check for time conflicts if date or time changed
+    lesson = get_lesson(lesson_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
+    if lesson:
+        new_date = data.get("date", lesson.get("date", ""))
+        new_start = data.get("start_time", "") or data.get("time", "") or lesson.get("start_time", "") or lesson.get("time", "")
+        new_end = data.get("end_time", "") or lesson.get("end_time", "")
+        conflict = _find_time_conflict(
+            new_date, new_start, new_end,
+            exclude_id=lesson_id,
+            telegram_id=current_user.telegram_id,
+            role=current_user.role.value,
+        )
+        if conflict:
+            c_title = conflict.get("title", "") or "Занятие"
+            c_start = conflict.get("start_time", "") or conflict.get("time", "")
+            c_end = conflict.get("end_time", "")
+            c_time = f"{c_start}—{c_end}" if c_start and c_end else c_start
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Time conflict with «{c_title}» ({c_time})",
+            )
+
     success = update_lesson(lesson_id, data, telegram_id=current_user.telegram_id, role=current_user.role.value)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")

@@ -264,21 +264,33 @@ export default function InboxPage() {
     api.getLessons().then(d => setAllLessons(d.lessons || [])).catch(() => {});
   }, []);
 
+  /** Проверка пересечения двух временных интервалов [start,end). */
+  const timesOverlap = (s1: string, e1: string, s2: string, e2: string): boolean => {
+    if (!s1 || !s2) return false;
+    if (!e1 || !e2) return s1 === s2;
+    return s1 < e2 && e1 > s2;
+  };
+
   // Check for conflicts when date/time changes
   const checkConflict = (date: string, time: string) => {
     if (!date || !time || !rescheduleData) {
       setRescheduleConflict(null);
       return;
     }
-    // Check all non-cancelled lessons at same date/time (teacher can't be in two places)
-    const conflict = allLessons.find(l =>
-      l.date === date &&
-      l.time === time &&
-      l.status !== 'cancelled' &&
-      l.id !== rescheduleData.lessonId
-    );
+    // Check all non-cancelled lessons that INTERSECT with this time slot
+    const conflict = allLessons.find(l => {
+      if (l.date !== date) return false;
+      if (l.status === 'cancelled') return false;
+      if (l.id === rescheduleData.lessonId) return false;
+      const lStart = l.start_time || l.time || '';
+      const lEnd = l.end_time || '';
+      return timesOverlap(time, '', lStart, lEnd);
+    });
     if (conflict) {
-      setRescheduleConflict(`Уже есть занятие «${conflict.title || ''}» на ${date} в ${time}`);
+      const cStart = conflict.start_time || conflict.time || '';
+      const cEnd = conflict.end_time || '';
+      const conflictTime = cStart && cEnd ? `${cStart}—${cEnd}` : cStart;
+      setRescheduleConflict(`⚠️ «${conflict.title || ''}» уже в этот промежуток (${conflictTime})`);
     } else {
       setRescheduleConflict(null);
     }
