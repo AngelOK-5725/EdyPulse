@@ -347,10 +347,11 @@ export const api = {
     request<{ students: Student[] }>(`/students?search=${encodeURIComponent(query)}`),
 
   // Attendance
-  getAttendance: (courseId?: string, date?: string) => {
+  getAttendance: (courseId?: string, date?: string, lessonId?: string) => {
     const params = new URLSearchParams();
     if (courseId) params.set('course_id', courseId);
     if (date) params.set('date', date);
+    if (lessonId) params.set('lesson_id', lessonId);
     const qs = params.toString();
     return request<{ attendance: AttendanceRecord[] }>(`/attendance${qs ? `?${qs}` : ''}`);
   },

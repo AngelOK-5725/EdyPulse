@@ -272,15 +272,16 @@ def enrich_lesson_with_attendance(
     course = get_course(course_id) if course_id else None
     course_color = course.get("color", "#6C5CE7") if course else "#6C5CE7"
 
-    # Attendance for this lesson (by lesson_id or by course_id+date)
+    # Attendance for this lesson — only by lesson_id (strict group membership)
+    # course_id+date fallback removed: different time slots = different groups, no leakage
     lesson_attendance = [
         a for a in attendance_records
         if a.get("lesson_id", "") == lesson_id
-        or (a.get("course_id", "") == course_id and a.get("date", "") == lesson_date)
     ]
 
-    # Students shown on lesson = only those with attendance records for this lesson
-    # NOT all students enrolled in the course (different time slots = different students)
+    # Students shown on lesson = only those with attendance records for THIS lesson.
+    # NOT all students enrolled in the course (different time slots = different groups).
+    # NOT students from other lessons on the same course+date.
     lesson_student_ids = {a.get("student_id") for a in lesson_attendance if a.get("student_id")}
     course_students = [s for s in all_students if s.get("id") in lesson_student_ids]
 

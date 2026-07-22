@@ -195,7 +195,7 @@ export default function LessonDetailPage() {
       // (students shown are ONLY those with attendance records)
       let loadedStudentIds: string[] = [];
       try {
-        const attData = await api.getAttendance(lessonData.course_id, lessonData.date);
+        const attData = await api.getAttendance(lessonData.course_id, lessonData.date, lessonData.id);
         const statusMap: Record<string, string> = {};
         const commentMap: Record<string, string> = {};
         for (const record of attData.attendance) {
@@ -419,9 +419,10 @@ export default function LessonDetailPage() {
     let recordId = attendanceRecordId;
     if (!recordId) {
       try {
-        const attData = await api.getAttendance(lesson.course_id, lesson.date);
-        const record = attData.attendance.find(r => r.student_id === studentId && r.lesson_id === lesson.id);
-        if (record) recordId = record.id;
+        const attData = await api.getAttendance(lesson.course_id, lesson.date, lesson.id);
+        if (attData.attendance.length > 0) {
+          recordId = attData.attendance[0].id;
+        }
       } catch { /* ignore */ }
     }
 

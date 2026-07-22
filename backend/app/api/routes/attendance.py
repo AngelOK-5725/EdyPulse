@@ -42,9 +42,15 @@ async def api_list_attendance(
     current_user: CurrentUser,
     course_id: Optional[str] = Query(None),
     date: Optional[str] = Query(None),
+    lesson_id: Optional[str] = Query(None),
 ):
-    """Get attendance records, optionally filtered by course and/or date."""
-    records = list_attendance(course_id, date, telegram_id=current_user.telegram_id, role=current_user.role.value)
+    """Get attendance records, optionally filtered by course, date, and/or lesson_id.
+
+    When lesson_id is provided, only attendance linked to that exact lesson
+    is returned. This ensures cross-lesson isolation: different time slots
+    (groups) don't share student lists.
+    """
+    records = list_attendance(course_id, date, lesson_id=lesson_id, telegram_id=current_user.telegram_id, role=current_user.role.value)
     return {"attendance": records}
 
 

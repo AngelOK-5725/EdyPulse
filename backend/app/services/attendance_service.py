@@ -39,8 +39,14 @@ def _user_filter(records: list[dict], user_id: Optional[str]) -> list[dict]:
 
 
 def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None,
+                    lesson_id: Optional[str] = None,
                     telegram_id: Optional[int] = None, role: Optional[str] = None) -> list[dict]:
-    """Get attendance records, filtered by user_id for non-Owner users."""
+    """Get attendance records, filtered by user_id for non-Owner users.
+
+    Supports filtering by course_id, date, and/or lesson_id.
+    When lesson_id is provided, only attendance records explicitly linked to
+    that lesson are returned (no cross-lesson leakage via course_id+date).
+    """
     repo = _get_repo()
     try:
         records = repo.get_all()
@@ -51,6 +57,8 @@ def list_attendance(course_id: Optional[str] = None, date: Optional[str] = None,
             records = [r for r in records if r.get("course_id", "") == course_id]
         if date:
             records = [r for r in records if r.get("date", "") == date]
+        if lesson_id:
+            records = [r for r in records if r.get("lesson_id", "") == lesson_id]
         return records
     except Exception as e:
         logger.error(f"Failed to list attendance: {e}")
