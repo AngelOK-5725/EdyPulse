@@ -101,11 +101,18 @@ def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
     """
     repo = _get_repo()
     now = datetime.now(timezone.utc).isoformat()
+    # Backward compatibility: if start_time is empty but time is set, use time as start_time
+    time_val = data.get("time", "")
+    start_time_val = data.get("start_time", "") or time_val
+    end_time_val = data.get("end_time", "")
+    
     record = {
         "id": data.get("id", ""),
         "course_id": data.get("course_id", ""),
         "date": data.get("date", ""),
-        "time": data.get("time", ""),
+        "time": time_val,
+        "start_time": start_time_val,
+        "end_time": end_time_val,
         "title": data.get("title", ""),
         "status": data.get("status", "scheduled"),
         "rescheduled_to": data.get("rescheduled_to", ""),
@@ -172,12 +179,30 @@ def ensure_lesson_for_course(course: dict, target_date: str, telegram_id: Option
         if existing:
             return existing[0]
 
+        # Calculate end_time from course duration if available
+        course_time = course.get("time", "")
+        course_duration = course.get("duration", "")
+        start_time = course_time
+        end_time = ""
+        if course_time and course_duration:
+            try:
+                duration_mins = int(course_duration)
+                h, m = course_time.split(":")
+                total_minutes = int(h) * 60 + int(m) + duration_mins
+                end_h = (total_minutes // 60) % 24
+                end_m = total_minutes % 60
+                end_time = f"{end_h:02d}:{end_m:02d}"
+            except (ValueError, IndexError):
+                pass
+
         # Create from course template with unique ID
         lesson = create_lesson({
             "id": f"lesson_{uuid4().hex[:8]}",
             "course_id": course.get("id", ""),
             "date": target_date,
-            "time": course.get("time", ""),
+            "time": course_time,
+            "start_time": start_time,
+            "end_time": end_time,
             "title": course.get("title", ""),
             "status": "scheduled",
             "location": course.get("location", ""),

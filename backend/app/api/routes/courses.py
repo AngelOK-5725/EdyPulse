@@ -20,6 +20,7 @@ class CourseCreate(BaseModel):
     description: Optional[str] = ""
     days: str = ""
     time: Optional[str] = ""
+    duration: Optional[int] = None   # minutes, e.g. 60 or 90
     price: float = 0
     teacher_id: Optional[int] = None
     color: str = "#6C5CE7"
@@ -38,6 +39,7 @@ class CourseUpdate(BaseModel):
     description: Optional[str] = None
     days: Optional[str] = None
     time: Optional[str] = None
+    duration: Optional[int] = None   # minutes
     price: Optional[float] = None
     color: Optional[str] = None
     student_ids: Optional[str] = None

@@ -4,7 +4,7 @@ from sheets.repositories.base import BaseRepository
 
 
 COURSES_HEADERS = [
-    "id", "title", "description", "days", "time",
+    "id", "title", "description", "days", "time", "duration",
     "price", "teacher_id", "color", "student_ids",
     "location", "location_link",
     "is_active", "created_at",

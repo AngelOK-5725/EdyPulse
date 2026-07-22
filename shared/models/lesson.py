@@ -14,7 +14,9 @@ class Lesson(BaseModel):
     id: str
     course_id: str = ""
     date: str
-    time: str = ""
+    time: str = ""               # Legacy: single time field, kept for backward compat
+    start_time: str = ""         # New: lesson start time (HH:MM)
+    end_time: str = ""           # New: lesson end time (HH:MM)
     title: str = ""
     status: LessonStatus = LessonStatus.SCHEDULED
     rescheduled_to: str = ""

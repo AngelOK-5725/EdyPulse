@@ -4,6 +4,7 @@ export interface Course {
   description?: string;
   days: string[];
   time?: string;
+  duration?: number;         // minutes, e.g. 60 or 90
   price: number;
   teacher_id?: number;
   color: string;

@@ -3,11 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { type Course, type Student, type Payment } from '../services/api';
 
+function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: string }): string {
+  const start = item.start_time || item.time || '';
+  const end = item.end_time || '';
+  if (start && end) {
+    return `${start} — ${end}`;
+  }
+  return start || '—';
+}
+
 interface LessonItem {
   id: string;
   course_id: string;
   date: string;
   time: string;
+  start_time: string;
+  end_time: string;
   title: string;
   status: string;
   attendance_stats?: {
@@ -385,7 +396,7 @@ export default function CourseDetailPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex flex-col items-center min-w-[44px]">
                       <span className="text-sm font-bold text-[var(--tg-theme-text-color)] leading-tight">
-                        {lesson.time || '—'}
+                        {getTimeDisplay(lesson)}
                       </span>
                       <span className="text-[9px] text-[var(--tg-theme-hint-color)]">{formatDate(lesson.date)}</span>
                     </div>

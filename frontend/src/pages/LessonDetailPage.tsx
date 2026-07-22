@@ -23,6 +23,16 @@ function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+// ─── Вспомогательная функция для отображения времени ──────────────────────
+function getTimeDisplay(lesson: { start_time?: string; end_time?: string; time?: string }): string {
+  const startTime = lesson.start_time || lesson.time || '';
+  const endTime = lesson.end_time || '';
+  if (startTime && endTime) {
+    return `${startTime} — ${endTime}`;
+  }
+  return startTime || '—';
+}
+
 // ─── Lesson type (from backend) ────────────────────────────────────────────
 
 interface LessonData {
@@ -30,6 +40,8 @@ interface LessonData {
   course_id: string;
   date: string;
   time: string;
+  start_time: string;
+  end_time: string;
   title: string;
   status: string;
   homework: string;
@@ -74,6 +86,8 @@ export default function LessonDetailPage() {
   const [editDraft, setEditDraft] = useState({
     title: '',
     time: '',
+    start_time: '',
+    end_time: '',
     location: '',
     location_link: '',
     homework: '',
@@ -225,11 +239,15 @@ export default function LessonDetailPage() {
     setCancelSaving(true);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
+      const startTime = lesson.start_time || lesson.time || '';
+      const endTime = lesson.end_time || '';
       // 1. Create a new make-up lesson for today
       const newLesson = await api.createLesson({
         course_id: lesson.course_id,
         date: todayStr,
-        time: lesson.time || undefined,
+        time: startTime || undefined,
+        start_time: startTime || undefined,
+        end_time: endTime || undefined,
         title: `Отработка: ${lesson.title}`,
         lesson_type: 'make_up',
         status: 'scheduled',
@@ -267,13 +285,15 @@ export default function LessonDetailPage() {
         course_id: lesson.course_id,
         title: lesson.title || 'Занятие',
         original_date: lesson.date,
-        time: lesson.time || '',
-        created_at: new Date().toISOString(),
-        type: 'cancelled_mark_later',
-      };
-      const existing = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
-      existing.push(reminder);
-      localStorage.setItem('edu_pulse_reminders', JSON.stringify(existing));
+      time: lesson.start_time || lesson.time || '',
+      start_time: lesson.start_time || lesson.time || '',
+      end_time: lesson.end_time || '',
+      created_at: new Date().toISOString(),
+      type: 'cancelled_mark_later',
+    };
+    const existing = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
+    existing.push(reminder);
+    localStorage.setItem('edu_pulse_reminders', JSON.stringify(existing));
 
       setLessonStatus('cancelled');
       setShowCancelModal(false);
@@ -298,11 +318,15 @@ export default function LessonDetailPage() {
     if (!lesson || !rescheduleDate) return;
     setRescheduleSaving(true);
     try {
+      const startTime = lesson.start_time || lesson.time || '';
+      const endTime = lesson.end_time || '';
       // 1. Create a new make-up lesson
       const newLesson = await api.createLesson({
         course_id: lesson.course_id,
         date: rescheduleDate,
-        time: rescheduleTime || undefined,
+        time: rescheduleTime || startTime || undefined,
+        start_time: rescheduleTime || startTime || undefined,
+        end_time: endTime || undefined,
         title: `Отработка: ${lesson.title}`,
         lesson_type: 'make_up',
         status: 'scheduled',
@@ -344,6 +368,8 @@ export default function LessonDetailPage() {
     setEditDraft({
       title: lesson.title || '',
       time: lesson.time || '',
+      start_time: lesson.start_time || lesson.time || '',
+      end_time: lesson.end_time || '',
       location: lesson.location || '',
       location_link: lesson.location_link || '',
       homework: homework,
@@ -358,13 +384,15 @@ export default function LessonDetailPage() {
     try {
       await api.updateLesson(lesson.id, {
         title: editDraft.title,
-        time: editDraft.time,
+        time: editDraft.start_time,
+        start_time: editDraft.start_time,
+        end_time: editDraft.end_time,
         location: editDraft.location,
         location_link: editDraft.location_link,
         homework: editDraft.homework,
         note: editDraft.note,
       });
-      setLesson(prev => prev ? { ...prev, ...editDraft } : null);
+      setLesson(prev => prev ? { ...prev, title: editDraft.title, time: editDraft.start_time, start_time: editDraft.start_time, end_time: editDraft.end_time, location: editDraft.location, location_link: editDraft.location_link, note: editDraft.note } : null);
       setHomework(editDraft.homework);
       setShowEditLesson(false);
     } catch (e) {
@@ -568,7 +596,9 @@ export default function LessonDetailPage() {
   }
 
   const lessonTitle = lesson.title || course?.title || 'Занятие';
-  const lessonTime = lesson.time || course?.time || '—';
+  const lessonTime = getTimeDisplay(lesson);
+  const lessonStartTime = lesson.start_time || lesson.time || '';
+  const lessonEndTime = lesson.end_time || '';
   const lessonLocation = lesson.location || course?.location || '';
   const lessonLocationLink = lesson.location_link || course?.location_link || '';
   const lessonColor = course?.color || '#6C5CE7';
@@ -634,6 +664,11 @@ export default function LessonDetailPage() {
                 <span className="text-2xl font-bold">{lessonTime}</span>
                 <span className="text-sm text-white/70">{lesson.date}</span>
               </div>
+              {lessonStartTime && lessonEndTime && (
+                <span className="text-[10px] text-white/50 block mt-0.5">
+                  ⏱ {lessonStartTime} — {lessonEndTime}
+                </span>
+              )}
               {course?.title && course.title !== lessonTitle && (
                 <span className="text-xs text-white/60 mt-0.5 block">
                   {course.title}
@@ -959,12 +994,18 @@ export default function LessonDetailPage() {
                   className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
               </div>
 
-              {/* Time */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">Время</label>
-                <input value={editDraft.time} onChange={e => setEditDraft(f => ({ ...f, time: e.target.value }))}
-                  placeholder="18:30"
-                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              {/* Start time and End time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">🕐 Начало</label>
+                  <input type="time" value={editDraft.start_time} onChange={e => setEditDraft(f => ({ ...f, start_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)]">⏰ Конец</label>
+                  <input type="time" value={editDraft.end_time} onChange={e => setEditDraft(f => ({ ...f, end_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
               </div>
 
               {/* Location */}

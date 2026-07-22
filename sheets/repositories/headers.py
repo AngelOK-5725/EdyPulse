@@ -11,7 +11,7 @@ USERS_HEADERS = [
 ]
 
 COURSES_HEADERS = [
-    "id", "title", "description", "days", "time",
+    "id", "title", "description", "days", "time", "duration",
     "price", "teacher_id", "color", "student_ids",
     "location", "location_link",
     "is_active", "created_at",
@@ -47,7 +47,7 @@ ACHIEVEMENTS_HEADERS = [
 ]
 
 LESSONS_HEADERS = [
-    "id", "course_id", "date", "time", "title",
+    "id", "course_id", "date", "time", "start_time", "end_time", "title",
     "status", "rescheduled_to", "homework", "location", "location_link",
     "note", "lesson_type", "is_active", "created_at",
     "user_id", "updated_at",

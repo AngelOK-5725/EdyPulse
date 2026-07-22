@@ -42,15 +42,25 @@ def get_dashboard(telegram_id: Optional[int] = None, role: Optional[str] = None)
 
     next_lesson = None
     for lesson in today_lessons:
-        lesson_time = lesson.get("time", "")
-        if lesson_time and lesson_time > current_time_str:
+        lesson_time_raw = lesson.get("time", "")
+        lesson_start = lesson.get("start_time", "") or lesson_time_raw
+        lesson_end = lesson.get("end_time", "")
+        if lesson_start and lesson_end:
+            time_display = f"{lesson_start} — {lesson_end}"
+        else:
+            time_display = lesson_start or lesson_time_raw
+
+        if lesson_start and lesson_start > current_time_str:
             # Find course for color/location
             course = next((c for c in courses if c.get("id") == lesson.get("course_id")), None)
             next_lesson = {
                 "id": lesson.get("id"),
                 "course_id": lesson.get("course_id"),
                 "title": lesson.get("title", ""),
-                "time": lesson_time,
+                "time": lesson_start,
+                "start_time": lesson_start,
+                "end_time": lesson_end,
+                "time_display": time_display,
                 "color": course.get("color", "#6C5CE7") if course else "#6C5CE7",
                 "location": lesson.get("location", "") or (course.get("location", "") if course else ""),
                 "location_link": lesson.get("location_link", "") or (course.get("location_link", "") if course else ""),
@@ -59,13 +69,24 @@ def get_dashboard(telegram_id: Optional[int] = None, role: Optional[str] = None)
 
     if not next_lesson and today_lessons:
         last = today_lessons[-1]
+        lesson_time_raw = last.get("time", "")
+        lesson_start = last.get("start_time", "") or lesson_time_raw
+        lesson_end = last.get("end_time", "")
+        if lesson_start and lesson_end:
+            time_display = f"{lesson_start} — {lesson_end}"
+        else:
+            time_display = lesson_start or lesson_time_raw
+
         course = next((c for c in courses if c.get("id") == last.get("course_id")), None)
         stats = next((ls.get("attendance_stats", {}) for ls in lessons_with_stats if ls.get("id") == last.get("id")), {})
         next_lesson = {
             "id": last.get("id"),
             "course_id": last.get("course_id"),
             "title": last.get("title", ""),
-            "time": last.get("time", ""),
+            "time": lesson_start,
+            "start_time": lesson_start,
+            "end_time": lesson_end,
+            "time_display": time_display,
             "color": course.get("color", "#6C5CE7") if course else "#6C5CE7",
             "location": last.get("location", "") or (course.get("location", "") if course else ""),
             "location_link": last.get("location_link", "") or (course.get("location_link", "") if course else ""),

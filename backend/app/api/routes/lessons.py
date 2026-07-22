@@ -22,6 +22,8 @@ class LessonCreate(BaseModel):
     course_id: str = ""
     date: str
     time: str = ""
+    start_time: str = ""
+    end_time: str = ""
     title: str = ""
     status: str = "scheduled"
     location: str = ""
@@ -31,6 +33,8 @@ class LessonCreate(BaseModel):
 
 class LessonUpdate(BaseModel):
     time: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     title: Optional[str] = None
     status: Optional[str] = None
     homework: Optional[str] = None

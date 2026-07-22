@@ -104,6 +104,7 @@ def create_course(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
         "description": data.get("description", ""),
         "days": data.get("days", ""),
         "time": data.get("time", ""),
+        "duration": str(data.get("duration", "")) if data.get("duration") else "",
         "price": str(data.get("price", 0)),
         "teacher_id": str(data.get("teacher_id", "")),
         "color": data.get("color", "#6C5CE7"),

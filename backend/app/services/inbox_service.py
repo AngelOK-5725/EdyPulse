@@ -49,27 +49,34 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
         enriched = enrich_lesson_with_attendance(lesson, all_students, today_attendance)
         stats = enriched.get("attendance_stats", {})
         unmarked = stats.get("unmarked", 0)
-        lesson_time = lesson.get("time", "")
+        # Time display: use start_time/end_time if available, fall back to legacy time
+        lesson_time_raw = lesson.get("time", "")
+        lesson_start = lesson.get("start_time", "") or lesson_time_raw
+        lesson_end = lesson.get("end_time", "")
+        if lesson_start and lesson_end:
+            time_display = f"{lesson_start} — {lesson_end}"
+        else:
+            time_display = lesson_start or lesson_time_raw
 
         # Student count
         student_count = enriched.get("student_count", 0)
         color = enriched.get("color", "#6C5CE7")
 
-        # Determine priority and status
+        # Determine priority and status (use raw lesson_start for comparison)
         if unmarked > 0:
-            if lesson_time and lesson_time <= current_time:
+            if lesson_start and lesson_start <= current_time:
                 priority = "high"
             else:
                 priority = "medium"
         else:
             priority = "low"
 
-        # Time until lesson (human-readable)
+        # Time until lesson (human-readable, use raw lesson_start)
         time_until = ""
         lesson_status = "upcoming"
-        if lesson_time:
+        if lesson_start:
             try:
-                lesson_h, lesson_m = lesson_time.split(":")
+                lesson_h, lesson_m = lesson_start.split(":")
                 lesson_minutes = int(lesson_h) * 60 + int(lesson_m)
                 now_h, now_m = now.strftime("%H:%M").split(":")
                 now_minutes = int(now_h) * 60 + int(now_m)
@@ -94,7 +101,6 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
 
         trial_count = stats.get("trial", 0)
         title = lesson.get("title", "Занятие")
-        time_str = lesson_time if lesson_time else ""
 
         # Subtitle shows extra info
         subtitle_parts = []
@@ -110,14 +116,14 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
 
         lesson_items.append({
             "id": f"lesson_{lesson.get('id', '')}",
-            "title": f"{time_str} {title}" if time_str else title,
+            "title": f"{time_display} {title}" if time_display else title,
             "subtitle": subtitle,
             "priority": priority,
             "action_label": action_label,
             "action_url": f"/lesson/{lesson.get('id', '')}",
             "lesson_id": lesson.get("id", ""),
             # Rich lesson data
-            "lesson_time": lesson_time,
+            "lesson_time": time_display,
             "student_count": student_count,
             "color": color,
             "time_until": time_until,

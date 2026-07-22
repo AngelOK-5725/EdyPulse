@@ -5,11 +5,22 @@ import api, { type Course } from '../services/api';
 
 // ─── Вспомогательные типы ──────────────────────────────────────────────────
 
+function getTimeDisplay(item: { start_time?: string; end_time?: string; time?: string }): string {
+  const start = item.start_time || item.time || '';
+  const end = item.end_time || '';
+  if (start && end) {
+    return `${start} — ${end}`;
+  }
+  return start || '—';
+}
+
 interface LessonItem {
   id: string;
   course_id: string;
   date: string;
   time: string;
+  start_time: string;
+  end_time: string;
   title: string;
   status: string;
   homework: string;
@@ -33,6 +44,8 @@ interface CreateLessonData {
   course_id: string;
   date: string;
   time: string;
+  start_time: string;
+  end_time: string;
   title: string;
   lesson_type: string; // regular | one_time | replacement | make_up
   status: string;
@@ -127,6 +140,8 @@ export default function LessonsPage() {
     course_id: '',
     date: getTodayString(),
     time: '',
+    start_time: '',
+    end_time: '',
     title: '',
     lesson_type: 'regular',
     status: 'scheduled',
@@ -331,6 +346,8 @@ export default function LessonsPage() {
       course_id: '',
       date: presetDate || selectedDate || getTodayString(),
       time: '',
+      start_time: '',
+      end_time: '',
       title: '',
       lesson_type: 'regular',
       status: 'scheduled',
@@ -346,6 +363,8 @@ export default function LessonsPage() {
       course_id: lesson.course_id,
       date: lesson.date,
       time: lesson.time || '',
+      start_time: lesson.start_time || lesson.time || '',
+      end_time: lesson.end_time || '',
       title: lesson.title,
       lesson_type: (lesson as any).lesson_type || 'regular',
       status: lesson.status || 'scheduled',
@@ -368,7 +387,9 @@ export default function LessonsPage() {
       await api.createLesson({
         course_id: form.course_id || undefined,
         date: form.date,
-        time: form.time || undefined,
+        time: form.start_time || undefined,
+        start_time: form.start_time || undefined,
+        end_time: form.end_time || undefined,
         title: form.title || undefined,
         lesson_type: form.lesson_type || 'regular',
         status: form.lesson_type === 'cancelled' ? 'cancelled' : (form.status || 'scheduled'),
@@ -393,7 +414,9 @@ export default function LessonsPage() {
       await api.updateLesson(editingLesson.id, {
         course_id: form.course_id || undefined,
         date: form.date,
-        time: form.time || undefined,
+        time: form.start_time || undefined,
+        start_time: form.start_time || undefined,
+        end_time: form.end_time || undefined,
         title: form.title || undefined,
         lesson_type: form.lesson_type || 'regular',
         status: form.lesson_type === 'cancelled' ? 'cancelled' : (form.status || 'scheduled'),
@@ -455,7 +478,7 @@ export default function LessonsPage() {
     if (!date || !time) return null;
     const conflict = lessons.find(l =>
       l.date === date &&
-      l.time === time &&
+      (l.start_time === time || l.time === time) &&
       l.status !== 'cancelled' &&
       l.id !== excludeId &&
       l.id !== editingLesson?.id
@@ -483,8 +506,9 @@ export default function LessonsPage() {
       // 1. Create a new make-up lesson
       const newLesson = await api.createLesson({
         course_id: editingLesson.course_id || undefined,
-        date: rescheduleDate,
-        time: rescheduleTime || undefined,
+        date: rescheduleDate,                        time: rescheduleTime || editingLesson.start_time || editingLesson.time || undefined,
+                        start_time: rescheduleTime || editingLesson.start_time || undefined,
+                        end_time: editingLesson.end_time || undefined,
         title: `Отработка: ${editingLesson.title}`,
         lesson_type: 'make_up',
         status: 'scheduled',
@@ -805,12 +829,20 @@ export default function LessonsPage() {
                 className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
             </div>
 
-            {/* Time */}
-            <div className="mb-4">
-              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">⏰ Время</label>
-              <input type="time" value={form.time}
-                onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+            {/* Start time & End time */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">🕐 Начало</label>
+                <input type="time" value={form.start_time}
+                  onChange={e => setForm(f => ({ ...f, start_time: e.target.value, time: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Конец</label>
+                <input type="time" value={form.end_time}
+                  onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]/30" />
+              </div>
             </div>
 
             {/* Title — обязательно, если не выбран курс */}
@@ -897,7 +929,9 @@ export default function LessonsPage() {
                     const newLesson = await api.createLesson({
                       course_id: editingLesson.course_id || undefined,
                       date: getTodayString(),
-                      time: editingLesson.time || undefined,
+                      time: editingLesson.start_time || editingLesson.time || undefined,
+                      start_time: editingLesson.start_time || editingLesson.time || undefined,
+                      end_time: editingLesson.end_time || undefined,
                       title: `Отработка: ${editingLesson.title}`,
                       lesson_type: 'make_up',
                       status: 'scheduled',
@@ -1038,7 +1072,7 @@ export default function LessonsPage() {
             <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
               <p className="text-xs font-semibold text-amber-800">{editingLesson.title || getCourseTitle(editingLesson.course_id)}</p>
               <p className="text-[10px] text-amber-600 mt-0.5">
-                Отменяется {editingLesson.date} в {editingLesson.time || '—'}
+                Отменяется {editingLesson.date} в {getTimeDisplay(editingLesson)}
               </p>
             </div>
 
@@ -1118,7 +1152,9 @@ export default function LessonsPage() {
                         lesson_type: 'make_up',
                         title: `Отработка: ${cl.title || getCourseTitle(cl.course_id)}`,
                         date: getTodayString(),
-                        time: cl.time || '',
+                        time: cl.start_time || cl.time || '',
+                        start_time: cl.start_time || cl.time || '',
+                        end_time: cl.end_time || '',
                       }));
                       setShowMakeUpPicker(false);
                       setShowForm(true);
@@ -1232,7 +1268,7 @@ export default function LessonsPage() {
                           {/* Time column */}
                           <div className="flex flex-col items-center min-w-[52px] pt-0.5">
                             <span className="text-xl font-bold text-[var(--tg-theme-text-color)] leading-tight">
-                              {lesson.time || '—'}
+                              {getTimeDisplay(lesson)}
                             </span>
                             <span className={`text-[10px] font-medium mt-0.5 px-1.5 py-0.5 rounded-full ${statusInfo.color}`}>
                               {statusInfo.icon}
@@ -1344,7 +1380,9 @@ export default function LessonsPage() {
                                       setForm({
                                         course_id: lesson.course_id,
                                         date: lesson.date,
-                                        time: lesson.time || '',
+                                        time: lesson.start_time || lesson.time || '',
+                                        start_time: lesson.start_time || lesson.time || '',
+                                        end_time: lesson.end_time || '',
                                         title: lesson.title,
                                         lesson_type: 'cancelled',
                                         status: lesson.status || 'scheduled',
