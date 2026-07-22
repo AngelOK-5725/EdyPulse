@@ -113,6 +113,7 @@ def create_lesson(data: dict, telegram_id: Optional[int] = None) -> Optional[dic
         "location": data.get("location", ""),
         "location_link": data.get("location_link", ""),
         "note": data.get("note", ""),
+        "lesson_type": data.get("lesson_type", "regular"),
         "is_active": "true",
         "created_at": now,
     }

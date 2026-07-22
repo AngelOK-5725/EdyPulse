@@ -138,6 +138,13 @@ export default function LessonsPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLessonDate, setCancelLessonDate] = useState('');
 
+  // ── Reschedule modal state (for 'Перенести на другой день')
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [savingReschedule, setSavingReschedule] = useState(false);
+  const [rescheduleConflict, setRescheduleConflict] = useState<string | null>(null);
+
   // ── Dropdown menu state
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
@@ -424,7 +431,15 @@ export default function LessonsPage() {
     const type = (lesson as any).lesson_type;
     // Не показываем бейдж для обычных (regular) занятий — это состояние по умолчанию
     if (!type || type === 'regular' || type === 'cancelled') return null;
-    return LESSON_TYPE_LABELS[type] || null;
+    const info = LESSON_TYPE_LABELS[type] || null;
+    if (!info) return null;
+    // Для отработки пытаемся извлечь исходную дату из note
+    let originalDate = '';
+    if (type === 'make_up' && lesson.note) {
+      const match = lesson.note.match(/от (\d{4}-\d{2}-\d{2})/);
+      if (match) originalDate = match[1];
+    }
+    return { ...info, originalDate };
   };
 
   const getUnmarkedCount = (lesson: LessonItem): number => {
@@ -433,6 +448,67 @@ export default function LessonsPage() {
 
   const getTotalMarked = (lesson: LessonItem): number => {
     return lesson.attendance_stats?.total_marked ?? 0;
+  };
+
+  // ── Conflict detection helper ──────────────────────────────────────────
+  const checkLessonConflict = (date: string, time: string, excludeId?: string) => {
+    if (!date || !time) return null;
+    const conflict = lessons.find(l =>
+      l.date === date &&
+      l.time === time &&
+      l.status !== 'cancelled' &&
+      l.id !== excludeId &&
+      l.id !== editingLesson?.id
+    );
+    if (conflict) {
+      const courseTitle = getCourseTitle(conflict.course_id);
+      return `⚠️ Уже есть занятие «${conflict.title || courseTitle}» на ${date} в ${time}`;
+    }
+    return null;
+  };
+
+  // ── Reschedule modal handlers ───────────────────────────────────────────
+  const openRescheduleModal = () => {
+    if (!editingLesson) return;
+    setRescheduleDate(new Date().toISOString().split('T')[0]);
+    setRescheduleTime(editingLesson.time || '');
+    setRescheduleConflict(null);
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!editingLesson || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      // 1. Create a new make-up lesson
+      const newLesson = await api.createLesson({
+        course_id: editingLesson.course_id || undefined,
+        date: rescheduleDate,
+        time: rescheduleTime || undefined,
+        title: `Отработка: ${editingLesson.title}`,
+        lesson_type: 'make_up',
+        status: 'scheduled',
+        note: `Отработка отменённого занятия от ${editingLesson.date}`,
+        location: editingLesson.location || undefined,
+        location_link: editingLesson.location_link || undefined,
+      });
+
+      // 2. Update original lesson as cancelled with rescheduled_to
+      await api.updateLesson(editingLesson.id, {
+        status: 'cancelled',
+        rescheduled_to: newLesson.id,
+      });
+
+      setShowRescheduleModal(false);
+      setShowCancelModal(false);
+      closeForm();
+      await loadData();
+    } catch (e) {
+      console.error('Failed to reschedule:', e);
+      alert('Ошибка при переносе занятия');
+    } finally {
+      setSavingReschedule(false);
+    }
   };
 
   // ── Loading state ────────────────────────────────────────────────────────
@@ -816,21 +892,24 @@ export default function LessonsPage() {
                   setShowCancelModal(false);
                   setSaving(true);
                   try {
-                    const data = {
-                      course_id: form.course_id || undefined,
+                    if (!editingLesson) return;
+                    // 1. Create a new make-up lesson for today
+                    const newLesson = await api.createLesson({
+                      course_id: editingLesson.course_id || undefined,
                       date: getTodayString(),
-                      time: form.time || undefined,
-                      title: form.title || undefined,
-                      lesson_type: form.lesson_type || 'cancelled',
-                      status: 'rescheduled',
-                      location: form.location || undefined,
-                      location_link: form.location_link || undefined,
-                    };
-                    if (editingLesson) {
-                      await api.updateLesson(editingLesson.id, data);
-                    } else {
-                      await api.createLesson(data);
-                    }
+                      time: editingLesson.time || undefined,
+                      title: `Отработка: ${editingLesson.title}`,
+                      lesson_type: 'make_up',
+                      status: 'scheduled',
+                      note: `Отработка отменённого занятия от ${editingLesson.date}`,
+                      location: editingLesson.location || undefined,
+                      location_link: editingLesson.location_link || undefined,
+                    });
+                    // 2. Update original lesson as cancelled with rescheduled_to
+                    await api.updateLesson(editingLesson.id, {
+                      status: 'cancelled',
+                      rescheduled_to: newLesson.id,
+                    });
                     closeForm();
                     await loadData();
                   } catch (e) {
@@ -846,7 +925,7 @@ export default function LessonsPage() {
                   <span className="text-2xl">📅</span>
                   <div>
                     <span className="text-sm font-semibold text-green-800 block">Проведём сегодня</span>
-                    <span className="text-[11px] text-green-600">Перенести на сегодняшний день</span>
+                    <span className="text-[11px] text-green-600">Создать отработку на сегодня</span>
                   </div>
                 </div>
               </button>
@@ -854,8 +933,7 @@ export default function LessonsPage() {
               {/* Option: Reschedule */}
               <button
                 onClick={() => {
-                  setShowCancelModal(false);
-                  setForm(f => ({ ...f, status: 'rescheduled' }));
+                  openRescheduleModal();
                 }}
                 className={`w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] ${saving ? 'opacity-50 pointer-events-none' : ''} border-amber-200 bg-amber-50 hover:border-amber-300`}
               >
@@ -863,7 +941,7 @@ export default function LessonsPage() {
                   <span className="text-2xl">🔄</span>
                   <div>
                     <span className="text-sm font-semibold text-amber-800 block">Перенести на другой день</span>
-                    <span className="text-[11px] text-amber-600">Выбрать новую дату в форме</span>
+                    <span className="text-[11px] text-amber-600">Выбрать новую дату и время</span>
                   </div>
                 </div>
               </button>
@@ -892,15 +970,17 @@ export default function LessonsPage() {
                     }
 
                     // Save reminder to localStorage
-                    const reminder = {
+                    const reminder: any = {
                       id: 'rem_' + Date.now(),
                       lesson_id: editingLesson?.id || savedLesson?.id || '',
                       course_id: form.course_id || '',
                       title: form.title || getCourseTitle(form.course_id) || 'Занятие',
                       original_date: form.date,
+                      time: form.time || '',
                       created_at: new Date().toISOString(),
                       type: 'cancelled_mark_later',
                     };
+                    reminder.time = form.time || '';
                     const existing = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
                     existing.push(reminder);
                     localStorage.setItem('edu_pulse_reminders', JSON.stringify(existing));
@@ -939,6 +1019,68 @@ export default function LessonsPage() {
         </div>
       )}
 
+
+      {/* ── Reschedule modal — выбор новой даты и времени для переноса */}
+      {showRescheduleModal && editingLesson && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => { setShowRescheduleModal(false); }}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold">🔄 Перенести занятие</h3>
+              <button onClick={() => setShowRescheduleModal(false)}
+                className="w-8 h-8 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-sm hover:opacity-70 transition-opacity">
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <p className="text-xs font-semibold text-amber-800">{editingLesson.title || getCourseTitle(editingLesson.course_id)}</p>
+              <p className="text-[10px] text-amber-600 mt-0.5">
+                Отменяется {editingLesson.date} в {editingLesson.time || '—'}
+              </p>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📆 Новая дата *</label>
+              <input type="date" value={rescheduleDate}
+                onChange={e => {
+                  setRescheduleDate(e.target.value);
+                  setRescheduleConflict(checkLessonConflict(e.target.value, rescheduleTime, editingLesson.id));
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Новое время</label>
+              <input type="time" value={rescheduleTime}
+                onChange={e => {
+                  setRescheduleTime(e.target.value);
+                  setRescheduleConflict(checkLessonConflict(rescheduleDate, e.target.value, editingLesson.id));
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            {rescheduleConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{rescheduleConflict}</span>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={() => setShowRescheduleModal(false)}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button onClick={handleRescheduleConfirm}
+                disabled={savingReschedule || !rescheduleDate || !!rescheduleConflict}
+                className="tg-button flex-1 text-sm disabled:opacity-50">
+                {savingReschedule ? '⏳ Перенос...' : '✅ Перенести'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Make-up picker modal — выбор отменённого занятия для возмещения */}
       {showMakeUpPicker && (
@@ -1109,6 +1251,9 @@ export default function LessonsPage() {
                               {lessonTypeInfo && lesson.status !== 'cancelled' && (
                                 <span className={`text-[9px] font-medium ${lessonTypeInfo.color} px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap`}>
                                   {lessonTypeInfo.icon} {lessonTypeInfo.label}
+                                  {'originalDate' in lessonTypeInfo && (lessonTypeInfo as any).originalDate
+                                    ? ` с ${(lessonTypeInfo as any).originalDate}`
+                                    : ''}
                                 </span>
                               )}
                               {lesson.status === 'cancelled' && (

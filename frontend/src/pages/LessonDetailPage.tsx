@@ -81,6 +81,18 @@ export default function LessonDetailPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // ── Cancel/Reschedule modal state ────────────────────────────────────
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelAction, setCancelAction] = useState<'cancelled' | 'rescheduled' | null>(null);
+  const [cancelSaving, setCancelSaving] = useState(false);
+
+  // ── Reschedule modal state ────────────────────────────────────────────
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleSaving, setRescheduleSaving] = useState(false);
+  const [rescheduleConflict, setRescheduleConflict] = useState<string | null>(null);
+
   // ── Student achievements state ───────────────────────────────────────
   const [achievementsMap, setAchievementsMap] = useState<Record<string, Achievement[]>>({});
   const [expandedAchievements, setExpandedAchievements] = useState<Record<string, boolean>>({});
@@ -180,14 +192,138 @@ export default function LessonDetailPage() {
   };
 
   // ── Lesson status management ────────────────────────────────────────────
-  const handleStatusChange = async (status: string) => {
+  const handleStatusChange = (status: string) => {
+    if (!lesson) return;
+    setShowStatusMenu(false);
+    if (status === 'cancelled') {
+      // Show cancel confirmation modal
+      setCancelAction('cancelled');
+      setShowCancelModal(true);
+    } else if (status === 'rescheduled') {
+      // Show reschedule modal directly
+      setCancelAction('rescheduled');
+      openRescheduleModal();
+    } else {
+      // Direct status change for 'scheduled'
+      doStatusChange(status);
+    }
+  };
+
+  const doStatusChange = async (status: string) => {
     if (!lesson) return;
     try {
       await api.updateLesson(lesson.id, { status });
       setLessonStatus(status);
-      setShowStatusMenu(false);
     } catch (e) {
       console.error('Failed to update lesson status:', e);
+    }
+  };
+
+  // ── Cancel lesson: option 1 - today make-up ───────────────────────────
+  const handleCancelToday = async () => {
+    if (!lesson) return;
+    setCancelSaving(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      // 1. Create a new make-up lesson for today
+      const newLesson = await api.createLesson({
+        course_id: lesson.course_id,
+        date: todayStr,
+        time: lesson.time || undefined,
+        title: `Отработка: ${lesson.title}`,
+        lesson_type: 'make_up',
+        status: 'scheduled',
+        note: `Отработка отменённого занятия от ${lesson.date}`,
+        location: lesson.location || undefined,
+        location_link: lesson.location_link || undefined,
+      });
+      // 2. Update original lesson as cancelled with rescheduled_to
+      await api.updateLesson(lesson.id, {
+        status: 'cancelled',
+        rescheduled_to: newLesson.id,
+      });
+      setLessonStatus('cancelled');
+      setShowCancelModal(false);
+      // Navigate to the new make-up lesson
+      navigate(`/lesson/${newLesson.id}`);
+    } catch (e) {
+      console.error('Failed to reschedule:', e);
+      alert('Ошибка при переносе занятия');
+    } finally {
+      setCancelSaving(false);
+    }
+  };
+
+  // ── Cancel lesson: option 2 - mark cancelled, save to localStorage ────
+  const handleCancelMarkLater = async () => {
+    if (!lesson) return;
+    setCancelSaving(true);
+    try {
+      await api.updateLesson(lesson.id, { status: 'cancelled' });
+      // Save reminder to localStorage
+      const reminder = {
+        id: 'rem_' + Date.now(),
+        lesson_id: lesson.id,
+        course_id: lesson.course_id,
+        title: lesson.title || 'Занятие',
+        original_date: lesson.date,
+        time: lesson.time || '',
+        created_at: new Date().toISOString(),
+        type: 'cancelled_mark_later',
+      };
+      const existing = JSON.parse(localStorage.getItem('edu_pulse_reminders') || '[]');
+      existing.push(reminder);
+      localStorage.setItem('edu_pulse_reminders', JSON.stringify(existing));
+
+      setLessonStatus('cancelled');
+      setShowCancelModal(false);
+    } catch (e) {
+      console.error('Failed to cancel lesson:', e);
+      alert('Ошибка при отмене занятия');
+    } finally {
+      setCancelSaving(false);
+    }
+  };
+
+  // ── Reschedule modal (for 'Перенести на другой день') ────────────────
+  const openRescheduleModal = () => {
+    if (!lesson) return;
+    setRescheduleDate('');
+    setRescheduleTime(lesson.time || '');
+    setRescheduleConflict(null);
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!lesson || !rescheduleDate) return;
+    setRescheduleSaving(true);
+    try {
+      // 1. Create a new make-up lesson
+      const newLesson = await api.createLesson({
+        course_id: lesson.course_id,
+        date: rescheduleDate,
+        time: rescheduleTime || undefined,
+        title: `Отработка: ${lesson.title}`,
+        lesson_type: 'make_up',
+        status: 'scheduled',
+        note: `Отработка отменённого занятия от ${lesson.date}`,
+        location: lesson.location || undefined,
+        location_link: lesson.location_link || undefined,
+      });
+      // 2. Update original lesson as cancelled with rescheduled_to
+      await api.updateLesson(lesson.id, {
+        status: 'cancelled',
+        rescheduled_to: newLesson.id,
+      });
+      setLessonStatus('cancelled');
+      setShowRescheduleModal(false);
+      // Navigate to the new make-up lesson
+      navigate(`/lesson/${newLesson.id}`);
+    } catch (e) {
+      console.error('Failed to reschedule:', e);
+      alert('Ошибка при переносе занятия');
+    } finally {
+      setRescheduleSaving(false);
     }
   };
 
@@ -795,7 +931,7 @@ export default function LessonDetailPage() {
           <p className="text-base font-semibold text-[var(--tg-theme-text-color)] mb-1">Занятие отменено</p>
           <p className="text-sm text-[var(--tg-theme-hint-color)]">Отметки и посещаемость не требуются</p>
           {permissions.canEditStudents && (
-            <button onClick={() => handleStatusChange('scheduled')}
+            <button onClick={() => doStatusChange('scheduled')}
               className="mt-4 tg-button text-sm">Восстановить занятие</button>
           )}
         </div>
@@ -871,6 +1007,129 @@ export default function LessonDetailPage() {
                   {savingEdit ? '💾 Сохранение...' : '✅ Сохранить'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Confirmation Modal ──────────────────────────────────── */}
+      {showCancelModal && lesson && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowCancelModal(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="text-center mb-5">
+              <span className="text-5xl block mb-3">🤔</span>
+              <h3 className="text-lg font-bold text-[var(--tg-theme-text-color)] mb-1">
+                Когда проведём отменённое занятие?
+              </h3>
+              <p className="text-xs text-[var(--tg-theme-hint-color)]">
+                {lesson.title} · {lesson.date} {lesson.time}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {/* Option: Today */}
+              <button
+                onClick={handleCancelToday}
+                disabled={cancelSaving}
+                className="w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-50 border-green-200 bg-green-50 hover:border-green-300"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">📅</span>
+                  <div>
+                    <span className="text-sm font-semibold text-green-800 block">Проведём сегодня</span>
+                    <span className="text-[11px] text-green-600">Создать отработку на сегодня</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option: Reschedule */}
+              <button
+                onClick={() => { setShowCancelModal(false); openRescheduleModal(); }}
+                disabled={cancelSaving}
+                className="w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-50 border-amber-200 bg-amber-50 hover:border-amber-300"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🔄</span>
+                  <div>
+                    <span className="text-sm font-semibold text-amber-800 block">Перенести на другой день</span>
+                    <span className="text-[11px] text-amber-600">Выбрать новую дату и время</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option: Mark later */}
+              <button
+                onClick={handleCancelMarkLater}
+                disabled={cancelSaving}
+                className="w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-50 border-purple-200 bg-purple-50 hover:border-purple-300"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⏰</span>
+                  <div>
+                    <span className="text-sm font-semibold text-purple-800 block">Отмечу позже</span>
+                    <span className="text-[11px] text-purple-600">Напомнить в Inbox (Важные)</span>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowCancelModal(false)}
+              className="w-full mt-4 py-3 rounded-xl text-sm text-[var(--tg-theme-hint-color)] hover:opacity-70 transition-opacity"
+            >
+              Назад
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reschedule Modal (date/time picker) ─────────────────────────── */}
+      {showRescheduleModal && lesson && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowRescheduleModal(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold">🔄 Перенести занятие</h3>
+              <button onClick={() => setShowRescheduleModal(false)}
+                className="p-1 text-[var(--tg-theme-hint-color)]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <p className="text-xs font-semibold text-amber-800">{lesson.title}</p>
+              <p className="text-[10px] text-amber-600 mt-0.5">
+                Отменяется {lesson.date} в {lesson.time || '—'}
+              </p>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📆 Новая дата *</label>
+              <input type="date" value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Новое время</label>
+              <input type="time" value={rescheduleTime}
+                onChange={e => setRescheduleTime(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => setShowRescheduleModal(false)}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button onClick={handleRescheduleConfirm}
+                disabled={rescheduleSaving || !rescheduleDate}
+                className="tg-button flex-1 text-sm disabled:opacity-50">
+                {rescheduleSaving ? '⏳ Перенос...' : '✅ Перенести'}
+              </button>
             </div>
           </div>
         </div>

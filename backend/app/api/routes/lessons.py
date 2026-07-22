@@ -26,6 +26,7 @@ class LessonCreate(BaseModel):
     status: str = "scheduled"
     location: str = ""
     location_link: str = ""
+    lesson_type: str = "regular"
 
 
 class LessonUpdate(BaseModel):
@@ -37,6 +38,7 @@ class LessonUpdate(BaseModel):
     location_link: Optional[str] = None
     note: Optional[str] = None
     rescheduled_to: Optional[str] = None
+    lesson_type: Optional[str] = None
 
 
 @router.get("")

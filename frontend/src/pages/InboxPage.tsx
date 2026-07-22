@@ -241,6 +241,105 @@ export default function InboxPage() {
     return () => window.removeEventListener('storage', loadReminders);
   }, []);
 
+  // ── Reschedule modal state ───────────────────────────────────────────
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleData, setRescheduleData] = useState<{
+    reminderId: string;
+    lessonId: string;
+    courseId: string;
+    title: string;
+    originalDate: string;
+    originalTime: string;
+  } | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [savingReschedule, setSavingReschedule] = useState(false);
+  const [rescheduleConflict, setRescheduleConflict] = useState<string | null>(null);
+
+  // Load all lessons for conflict detection
+  const [allLessons, setAllLessons] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Pre-load lessons for conflict detection
+    api.getLessons().then(d => setAllLessons(d.lessons || [])).catch(() => {});
+  }, []);
+
+  // Check for conflicts when date/time changes
+  const checkConflict = (date: string, time: string) => {
+    if (!date || !time || !rescheduleData) {
+      setRescheduleConflict(null);
+      return;
+    }
+    // Check all non-cancelled lessons at same date/time (teacher can't be in two places)
+    const conflict = allLessons.find(l =>
+      l.date === date &&
+      l.time === time &&
+      l.status !== 'cancelled' &&
+      l.id !== rescheduleData.lessonId
+    );
+    if (conflict) {
+      setRescheduleConflict(`Уже есть занятие «${conflict.title || ''}» на ${date} в ${time}`);
+    } else {
+      setRescheduleConflict(null);
+    }
+  };
+
+  const openRescheduleModal = (reminder: any) => {
+    setRescheduleData({
+      reminderId: reminder.id,
+      lessonId: reminder.lesson_id || '',
+      courseId: reminder.course_id || '',
+      title: reminder.title || 'Занятие',
+      originalDate: reminder.original_date || '',
+      originalTime: reminder.time || '',
+    });
+    // Default: today, same time as original
+    setRescheduleDate(new Date().toISOString().split('T')[0]);
+    setRescheduleTime(reminder.time || '');
+    setRescheduleConflict(null);
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!rescheduleData || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      // 1. Create a new make-up lesson
+      const newLesson = await api.createLesson({
+        course_id: rescheduleData.courseId || undefined,
+        date: rescheduleDate,
+        time: rescheduleTime || undefined,
+        title: `Отработка: ${rescheduleData.title}`,
+        lesson_type: 'make_up',
+        status: 'scheduled',
+        note: `Отработка отменённого занятия от ${rescheduleData.originalDate}`,
+      });
+
+      // 2. Update the original cancelled lesson's rescheduled_to
+      if (rescheduleData.lessonId) {
+        try {
+          await api.updateLesson(rescheduleData.lessonId, {
+            rescheduled_to: newLesson.id,
+          });
+        } catch (e) {
+          console.error('Failed to update original lesson:', e);
+        }
+      }
+
+      // 3. Dismiss reminder
+      dismissReminder(rescheduleData.reminderId);
+      dismissCancelledLesson(`cancelled_${rescheduleData.lessonId}`);
+
+      setShowRescheduleModal(false);
+      setRescheduleData(null);
+    } catch (e) {
+      console.error('Failed to reschedule:', e);
+      alert('Ошибка при создании отработки');
+    } finally {
+      setSavingReschedule(false);
+    }
+  };
+
   // Удалить напоминание
   const dismissReminder = (id: string) => {
     const updated = localReminders.filter(r => r.id !== id);
@@ -375,11 +474,7 @@ export default function InboxPage() {
                   </p>
                   <div className="flex items-center gap-2 mt-2">
                     <button
-                      onClick={() => {
-                        // Navigate to lessons page with the original date
-                        navigate('/school/lessons');
-                        dismissReminder(reminder.id);
-                      }}
+                      onClick={() => openRescheduleModal(reminder)}
                       className="text-[11px] font-medium text-white bg-purple-500 rounded-lg px-3 py-1.5 hover:bg-purple-600 transition-colors"
                     >
                       Запланировать
@@ -467,6 +562,71 @@ export default function InboxPage() {
       <p className="text-center text-[9px] text-[var(--tg-theme-hint-color)] pt-1">
         Данные обновляются автоматически · {inbox.stats.total} сигналов
       </p>
+
+      {/* ── Reschedule Modal ──────────────────────────────────────────── */}
+      {showRescheduleModal && rescheduleData && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => { setShowRescheduleModal(false); setRescheduleData(null); }}>
+          <div className="w-full max-w-sm bg-[var(--tg-theme-bg-color)] rounded-3xl p-5 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold">📅 Запланировать отработку</h3>
+              <button onClick={() => { setShowRescheduleModal(false); setRescheduleData(null); }}
+                className="p-1 text-[var(--tg-theme-hint-color)]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="mb-3 p-3 rounded-xl bg-purple-50 border border-purple-100">
+              <p className="text-xs font-semibold text-purple-800">❌ {rescheduleData.title}</p>
+              <p className="text-[10px] text-purple-600 mt-0.5">
+                Отменено {rescheduleData.originalDate}
+                {rescheduleData.originalTime && ` в ${rescheduleData.originalTime}`}
+              </p>
+            </div>
+
+            {/* Date picker */}
+            <div className="mb-3">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📆 Дата отработки *</label>
+              <input type="date" value={rescheduleDate}
+                onChange={e => {
+                  setRescheduleDate(e.target.value);
+                  checkConflict(e.target.value, rescheduleTime);
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            {/* Time picker */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Время</label>
+              <input type="time" value={rescheduleTime}
+                onChange={e => {
+                  setRescheduleTime(e.target.value);
+                  checkConflict(rescheduleDate, e.target.value);
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+            </div>
+
+            {/* Conflict warning */}
+            {rescheduleConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{rescheduleConflict}</span>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={() => { setShowRescheduleModal(false); setRescheduleData(null); }}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button onClick={handleRescheduleConfirm}
+                disabled={savingReschedule || !rescheduleDate || !!rescheduleConflict}
+                className="tg-button flex-1 text-sm disabled:opacity-50">
+                {savingReschedule ? '⏳...' : '✅ Запланировать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
