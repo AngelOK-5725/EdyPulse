@@ -807,9 +807,9 @@ export default function InboxPage() {
 
       {/* ── One-off Lesson Modal ───────────────────────────────────────── */}
       {showOneOffLesson && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-3 animate-fade-in overflow-y-auto"
           onClick={() => setShowOneOffLesson(false)}>
-          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up"
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up my-8"
             onClick={e => e.stopPropagation()}>
 
             <div className="flex items-center justify-between mb-4">

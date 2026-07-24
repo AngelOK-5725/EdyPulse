@@ -202,3 +202,53 @@ async def api_remove_student_from_group(group_id: str, student_id: str, current_
             detail="Group or student not found in group",
         )
     return {"status": "ok"}
+
+
+@router.post("/clear-students")
+async def api_clear_group_students(current_user: CurrentUser):
+    """Очистить student_ids во всех группах.
+
+    Полезно после миграции, когда group.student_ids унаследовали
+    старые данные из course.student_ids.
+
+    Требует прав администратора.
+    """
+    groups = list_groups(
+        active_only=True,
+        telegram_id=current_user.telegram_id,
+        role=current_user.role.value,
+    )
+
+    cleared = 0
+    errors = 0
+    details = []
+
+    for g in groups:
+        gid = g.get("id", "")
+        name = g.get("name", "")
+        ids_str = g.get("student_ids", "")
+        student_ids = [s.strip() for s in ids_str.split(",") if s.strip()] if ids_str else []
+
+        if not student_ids:
+            details.append({"id": gid, "name": name, "cleared": False, "reason": "already empty"})
+            continue
+
+        success = update_group(
+            gid, {"student_ids": ""},
+            telegram_id=current_user.telegram_id,
+            role=current_user.role.value,
+        )
+        if success:
+            cleared += 1
+            details.append({"id": gid, "name": name, "cleared": True, "removed": len(student_ids)})
+        else:
+            errors += 1
+            details.append({"id": gid, "name": name, "cleared": False, "reason": "update failed"})
+
+    return {
+        "status": "ok",
+        "total_groups": len(groups),
+        "cleared": cleared,
+        "errors": errors,
+        "details": details,
+    }

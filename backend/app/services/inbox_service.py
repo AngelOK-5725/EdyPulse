@@ -1,8 +1,7 @@
 """Inbox service — aggregates actionable signals for the teacher's daily flow.
 
-Returns items grouped by category (lessons, payments, trials, attention, actions)
-so the inbox scales gracefully even with many students and courses.
-"""
+Returns items grouped by category (lessons, payments, trials, attention)
+so the inbox scales gracefully even with many students and courses."""
 
 import logging
 from datetime import date, datetime, timedelta
@@ -283,26 +282,6 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
             "lesson_id": lesson.get("id", ""),
         })
 
-    # ── 6. QUICK ACTIONS ──────────────────────────────────────────────────
-    action_items = [
-        {
-            "id": "action_new_student",
-            "title": "➕ Новый ученик",
-            "subtitle": "Добавить и записать на курс",
-            "priority": "low",
-            "action_label": "Добавить",
-            "action_url": "/admin/students",
-        },
-        {
-            "id": "action_new_lesson",
-            "title": "📅 Разовое занятие",
-            "subtitle": "Отработка, открытый урок или праздник",
-            "priority": "low",
-            "action_label": "Создать",
-            "action_url": "/admin/courses",
-        },
-    ]
-
     # ── SORT within each group: high → medium → low ────────────────────────
     priority_value = {"high": 0, "medium": 1, "low": 2}
 
@@ -314,7 +293,7 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
     trial_items.sort(key=sort_key)
     attention_items.sort(key=sort_key)
 
-    # ── BUILD GROUPS (only non-empty groups, plus actions) ─────────────────
+    # ── BUILD GROUPS (only non-empty groups) ──────────────────────────────
     groups: list[dict[str, Any]] = []
 
     # Lessons group is ALWAYS shown, even when empty — gives the teacher
@@ -356,16 +335,8 @@ def get_inbox(telegram_id: Optional[int] = None, role: Optional[str] = None) -> 
             "items": cancelled_items,
         })
 
-    # Actions always shown
-    groups.append({
-        "key": "actions",
-        "label": "Быстрые действия",
-        "icon": "⚡",
-        "items": action_items,
-    })
-
     # ── STATS ──────────────────────────────────────────────────────────────
-    all_items = lesson_items + payment_items + trial_items + attention_items + cancelled_items + action_items
+    all_items = lesson_items + payment_items + trial_items + attention_items + cancelled_items
     high_count = sum(1 for i in all_items if i.get("priority") == "high")
 
     return {

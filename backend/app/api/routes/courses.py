@@ -58,8 +58,8 @@ class CourseUpdate(BaseModel):
 async def api_list_courses(current_user: CurrentUser):
     """Get all active courses with real student counts.
 
-    Student counts are computed from attendance records across all lessons,
-    NOT from the legacy `course.student_ids` field.
+    Student counts are computed from group rosters (group.student_ids),
+    NOT from the legacy `course.student_ids` or attendance records.
     """
     courses = list_courses(telegram_id=current_user.telegram_id, role=current_user.role.value)
     # Enrich each course with the real student count from lesson attendance
