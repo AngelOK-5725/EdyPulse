@@ -214,6 +214,32 @@ export default function InboxPage() {
   const [localReminders, setLocalReminders] = useState<any[]>([]);
   const [dismissedCancelled, setDismissedCancelled] = useState<Set<string>>(new Set());
 
+  // ── Quick actions modals ────────────────────────────────────────────
+  const [showNewStudent, setShowNewStudent] = useState(false);
+  const [showOneOffLesson, setShowOneOffLesson] = useState(false);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [courseGroups, setCourseGroups] = useState<any[]>([]);
+  const [savingQuickAction, setSavingQuickAction] = useState(false);
+
+  // New Student form
+  const [newStudentForm, setNewStudentForm] = useState({
+    first_name: '',
+    last_name: '',
+    phone: '',
+    course_id: '',
+    group_id: '',
+  });
+
+  // One-off Lesson form
+  const [oneOffLessonForm, setOneOffLessonForm] = useState({
+    title: '',
+    date: '',
+    start_time: '',
+    end_time: '',
+    location: '',
+    location_link: '',
+  });
+
   useEffect(() => {
     loadInbox();
     const interval = setInterval(loadInbox, 30000);
@@ -240,6 +266,88 @@ export default function InboxPage() {
     window.addEventListener('storage', loadReminders);
     return () => window.removeEventListener('storage', loadReminders);
   }, []);
+
+  // Load courses for quick action modals
+  useEffect(() => {
+    api.getCourses().then(d => setCourses(d.courses || [])).catch(() => {});
+  }, []);
+
+  // Load groups when course is selected
+  useEffect(() => {
+    if (newStudentForm.course_id) {
+      api.getCourseGroups(newStudentForm.course_id)
+        .then(d => setCourseGroups(d.groups || []))
+        .catch(() => setCourseGroups([]));
+    } else {
+      setCourseGroups([]);
+    }
+  }, [newStudentForm.course_id]);
+
+  const openNewStudentModal = () => {
+    setNewStudentForm({ first_name: '', last_name: '', phone: '', course_id: '', group_id: '' });
+    setShowNewStudent(true);
+  };
+
+  const openOneOffLessonModal = () => {
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setOneOffLessonForm({ title: '', date: dateStr, start_time: '', end_time: '', location: '', location_link: '' });
+    setShowOneOffLesson(true);
+  };
+
+  const handleCreateStudent = async () => {
+    if (!newStudentForm.first_name.trim()) return;
+    setSavingQuickAction(true);
+    try {
+      // Create student
+      const created = await api.createStudent({
+        first_name: newStudentForm.first_name,
+        last_name: newStudentForm.last_name || undefined,
+        phone: newStudentForm.phone || undefined,
+        course_ids: '',
+      });
+
+      // If course and group selected, add to group
+      if (newStudentForm.group_id) {
+        await api.addStudentToGroup(newStudentForm.group_id, created.id).catch(() => {});
+      } else if (newStudentForm.course_id) {
+        // Fallback: enroll in course
+        await api.enrollStudent(newStudentForm.course_id, created.id).catch(() => {});
+      }
+
+      setShowNewStudent(false);
+      setNewStudentForm({ first_name: '', last_name: '', phone: '', course_id: '', group_id: '' });
+    } catch (e) {
+      console.error('Failed to create student:', e);
+      alert('Ошибка при создании ученика');
+    } finally {
+      setSavingQuickAction(false);
+    }
+  };
+
+  const handleCreateOneOffLesson = async () => {
+    if (!oneOffLessonForm.date || !oneOffLessonForm.start_time || !oneOffLessonForm.title.trim()) return;
+    setSavingQuickAction(true);
+    try {
+      await api.createLesson({
+        date: oneOffLessonForm.date,
+        start_time: oneOffLessonForm.start_time,
+        end_time: oneOffLessonForm.end_time || undefined,
+        title: oneOffLessonForm.title,
+        lesson_type: 'one_time',
+        status: 'scheduled',
+        location: oneOffLessonForm.location || undefined,
+        location_link: oneOffLessonForm.location_link || undefined,
+      });
+      setShowOneOffLesson(false);
+      setOneOffLessonForm({ title: '', date: '', start_time: '', end_time: '', location: '', location_link: '' });
+    } catch (e) {
+      console.error('Failed to create one-off lesson:', e);
+      alert('Ошибка при создании разового занятия');
+    } finally {
+      setSavingQuickAction(false);
+    }
+  };
 
   // ── Reschedule modal state ───────────────────────────────────────────
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -455,6 +563,23 @@ export default function InboxPage() {
         <span className="ml-auto text-[10px] opacity-60">{inbox.stats.total} всего</span>
       </div>
 
+      {/* ── Quick actions ───────────────────────────────────────────── */}
+      <div className="flex gap-2">
+        <button
+          onClick={openNewStudentModal}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all active:scale-[0.98]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Новый ученик
+        </button>
+        <button
+          onClick={openOneOffLessonModal}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all active:scale-[0.98]"
+        >
+          ⭐ Разовое занятие
+        </button>
+      </div>
+
       {/* ── Local reminders (cancelled lessons marked later) ────────── */}
       {localReminders.length > 0 && (
         <div className="space-y-1.5">
@@ -492,12 +617,7 @@ export default function InboxPage() {
                     >
                       Запланировать
                     </button>
-                    <button
-                      onClick={() => dismissReminder(reminder.id)}
-                      className="text-[11px] text-purple-400 hover:text-purple-600 transition-colors px-2 py-1"
-                    >
-                      ✓ Готово
-                    </button>
+                    {/* Кнопка "Готово" удалена — только перенос */}
                   </div>
                 </div>
               </div>
@@ -575,6 +695,189 @@ export default function InboxPage() {
       <p className="text-center text-[9px] text-[var(--tg-theme-hint-color)] pt-1">
         Данные обновляются автоматически · {inbox.stats.total} сигналов
       </p>
+
+      {/* ── New Student Modal ────────────────────────────────────────── */}
+      {showNewStudent && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => setShowNewStudent(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-[var(--tg-theme-text-color)]">➕ Новый ученик</h3>
+              <button onClick={() => setShowNewStudent(false)}
+                className="w-8 h-8 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-sm hover:opacity-70 transition-opacity">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">Имя *</label>
+                  <input value={newStudentForm.first_name}
+                    onChange={e => setNewStudentForm(f => ({ ...f, first_name: e.target.value }))}
+                    placeholder="Имя"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">Фамилия</label>
+                  <input value={newStudentForm.last_name}
+                    onChange={e => setNewStudentForm(f => ({ ...f, last_name: e.target.value }))}
+                    placeholder="Фамилия"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📞 Телефон</label>
+                <input value={newStudentForm.phone}
+                  onChange={e => setNewStudentForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+7 (777) 123-45-67"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              {/* Course selector */}
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">📚 Курс</label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setNewStudentForm(f => ({ ...f, course_id: '', group_id: '' }))}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      !newStudentForm.course_id
+                        ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                        : 'border-gray-200 bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                    }`}>
+                    ➖ Не выбран
+                  </button>
+                  {courses.map(c => (
+                    <button key={c.id}
+                      onClick={() => setNewStudentForm(f => ({ ...f, course_id: c.id, group_id: '' }))}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        newStudentForm.course_id === c.id
+                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                          : 'border-gray-200 bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                      }`}>
+                      {c.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group selector (shown when course selected) */}
+              {newStudentForm.course_id && courseGroups.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1.5 block">🏫 Группа</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setNewStudentForm(f => ({ ...f, group_id: '' }))}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        !newStudentForm.group_id
+                          ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                          : 'border-gray-200 bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                      }`}>
+                      ➖ Только курс
+                    </button>
+                    {courseGroups.map(g => (
+                      <button key={g.id}
+                        onClick={() => setNewStudentForm(f => ({ ...f, group_id: g.id }))}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                          newStudentForm.group_id === g.id
+                            ? 'border-[var(--tg-theme-button-color)] bg-[var(--tg-theme-button-color)] text-white'
+                            : 'border-gray-200 bg-[var(--tg-theme-secondary-bg-color)] text-[var(--tg-theme-text-color)]'
+                        }`}>
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setShowNewStudent(false)}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button onClick={handleCreateStudent}
+                disabled={savingQuickAction || !newStudentForm.first_name.trim()}
+                className="tg-button flex-1 text-sm disabled:opacity-50">
+                {savingQuickAction ? '⏳...' : '✅ Добавить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── One-off Lesson Modal ───────────────────────────────────────── */}
+      {showOneOffLesson && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-fade-in"
+          onClick={() => setShowOneOffLesson(false)}>
+          <div className="bg-[var(--tg-theme-bg-color)] rounded-3xl w-full max-w-sm p-5 shadow-2xl animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-[var(--tg-theme-text-color)]">⭐ Разовое занятие</h3>
+              <button onClick={() => setShowOneOffLesson(false)}
+                className="w-8 h-8 rounded-full bg-[var(--tg-theme-secondary-bg-color)] flex items-center justify-center text-sm hover:opacity-70 transition-opacity">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📝 Название *</label>
+                <input value={oneOffLessonForm.title}
+                  onChange={e => setOneOffLessonForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Мастер-класс по робототехнике"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📅 Дата *</label>
+                <input type="date" value={oneOffLessonForm.date}
+                  onChange={e => setOneOffLessonForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">🕐 Начало *</label>
+                  <input type="time" value={oneOffLessonForm.start_time}
+                    onChange={e => setOneOffLessonForm(f => ({ ...f, start_time: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">⏰ Конец</label>
+                  <input type="time" value={oneOffLessonForm.end_time}
+                    onChange={e => setOneOffLessonForm(f => ({ ...f, end_time: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">📍 Место</label>
+                <input value={oneOffLessonForm.location}
+                  onChange={e => setOneOffLessonForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="ул. Московская, д. 10"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[var(--tg-theme-hint-color)] mb-1 block">🔗 Ссылка</label>
+                <input value={oneOffLessonForm.location_link}
+                  onChange={e => setOneOffLessonForm(f => ({ ...f, location_link: e.target.value }))}
+                  placeholder="https://yandex.ru/maps/..."
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--tg-theme-secondary-bg-color)] text-sm outline-none focus:ring-2" />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setShowOneOffLesson(false)}
+                className="tg-button-secondary flex-1 text-sm">Отмена</button>
+              <button onClick={handleCreateOneOffLesson}
+                disabled={savingQuickAction || !oneOffLessonForm.date || !oneOffLessonForm.start_time || !oneOffLessonForm.title.trim()}
+                className="tg-button flex-1 text-sm disabled:opacity-50">
+                {savingQuickAction ? '⏳...' : '✅ Создать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Reschedule Modal ──────────────────────────────────────────── */}
       {showRescheduleModal && rescheduleData && (

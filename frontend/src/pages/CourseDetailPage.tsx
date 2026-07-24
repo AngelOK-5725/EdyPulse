@@ -156,17 +156,37 @@ export default function CourseDetailPage() {
       setLoading(true);
       setError(null);
 
-      const [courseData, studentsData, groupsData, paymentsData] = await Promise.all([
+      const [courseData, groupsData, paymentsData] = await Promise.all([
         api.getCourse(courseId),
-        api.getStudents(courseId),
         api.getCourseGroups(courseId).catch(() => ({ groups: [] })),
         api.getPayments().catch(() => ({ payments: [] })),
       ]);
 
       setCourse(courseData);
-      setStudents(studentsData.students || []);
       setGroups(groupsData.groups || []);
       setPayments((paymentsData.payments || []).filter((p: Payment) => p.course_id === courseId));
+
+      // ── Collect unique student IDs from all groups of this course ─────
+      const uniqueStudentIds = new Set<string>();
+      for (const group of (groupsData.groups || [])) {
+        const ids = group.student_ids
+          ? group.student_ids.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : [];
+        for (const id of ids) {
+          uniqueStudentIds.add(id);
+        }
+      }
+
+      // Fetch student details for all unique IDs
+      if (uniqueStudentIds.size > 0) {
+        const studentPromises = Array.from(uniqueStudentIds).map(id =>
+          api.getStudent(id).catch(() => null as any)
+        );
+        const fetchedStudents = await Promise.all(studentPromises);
+        setStudents(fetchedStudents.filter(Boolean));
+      } else {
+        setStudents([]);
+      }
     } catch (e) {
       console.error('CourseDetailPage: Failed to load course:', e);
       setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
@@ -486,7 +506,7 @@ export default function CourseDetailPage() {
           {students.length === 0 ? (
             <div className="tg-card flex flex-col items-center py-8 text-center">
               <span className="text-4xl mb-3">👨‍🎓</span>
-              <p className="text-sm text-[var(--tg-theme-hint-color)]">Нет учеников на этом курсе</p>
+              <p className="text-sm text-[var(--tg-theme-hint-color)]">Учеников пока нет. Добавьте учеников в группы</p>
             </div>
           ) : (
             students.map(student => {

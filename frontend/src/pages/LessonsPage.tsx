@@ -137,6 +137,7 @@ export default function LessonsPage() {
 
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [allGroups, setAllGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -257,6 +258,7 @@ export default function LessonsPage() {
       let groupsData: any = null;
       try {
         groupsData = await api.getGroups();
+        setAllGroups(groupsData.groups || []);
         const groups = groupsData.groups || [];
         for (const group of groups) {
           if (!group.days || !group.start_time) continue;
@@ -530,6 +532,14 @@ export default function LessonsPage() {
 
   const getTotalMarked = (lesson: LessonItem): number => {
     return lesson.attendance_stats?.total_marked ?? 0;
+  };
+
+  // ── Get real student count from group (not from attendance) ───────────
+  const getGroupStudentCount = (lesson: LessonItem): number => {
+    if (!lesson.group_id) return 0;
+    const group = allGroups.find(g => g.id === lesson.group_id);
+    if (!group || !group.student_ids) return 0;
+    return group.student_ids.split(',').filter(Boolean).length;
   };
 
   // ── Conflict detection helper (ПРОВЕРЯЕТ ПЕРЕСЕЧЕНИЕ ИНТЕРВАЛОВ) ─────
@@ -1388,11 +1398,11 @@ export default function LessonsPage() {
                               <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
                                 {getCourseTitle(lesson.course_id)}
                               </span>
-                              {lesson.student_count > 0 && (
+                              {getGroupStudentCount(lesson) > 0 && (
                                 <>
                                   <span className="text-[var(--tg-theme-hint-color)]">·</span>
                                   <span className="text-[11px] text-[var(--tg-theme-hint-color)]">
-                                    👨‍🎓 {lesson.student_count}
+                                    👨‍🎓 {getGroupStudentCount(lesson)}
                                   </span>
                                 </>
                               )}
