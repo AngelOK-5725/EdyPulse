@@ -376,14 +376,20 @@ docker compose up --build   # http://localhost:80
 ```
 Course (шаблон расписания)
 ├── title, days[], time, price, color
-├── student_ids[]              ← постоянные ученики курса
-└── → Lessons[]                ← авто-создаются из расписания
+└── → Groups[]                  ← группы курса
+
+Group (устойчивая группа учеников)
+├── name, days[], start_time, end_time
+├── student_ids[]               ← постоянный состав группы
+├── location, teacher
+└── → Lessons[]                 ← авто-создаются из расписания группы
 
 Lesson (конкретное занятие) ★
-├── course_id, date, time, title
+├── course_id, group_id, date, time, title
 ├── status: scheduled | completed | cancelled | rescheduled
 ├── homework, location, note
-└── Attendance[]               ← отметки по lesson_id
+├── Attendance[]                ← отметки по lesson_id
+└── Ученики наследуются из группы (group.student_ids)
 
 Student
 ├── first_name, last_name, возраст
@@ -410,7 +416,7 @@ Payment (журнал — без расчётов)
 
 **Students** — `id`, `first_name`, `last_name`, `age`, `birth_date`, `parent_contact`, `parent_name`, `parent_relation`, `phone`, `telegram`, `course_ids`, `start_date`, `photo_url`, `is_active`, `created_at`
 
-**Lessons** — `id`, `course_id`, `date`, `time`, `title`, `status`, `rescheduled_to`, `homework`, `location`, `location_link`, `note`, `is_active`, `created_at`
+**Lessons** — `id`, `course_id`, `group_id`, `date`, `time`, `start_time`, `end_time`, `title`, `status`, `rescheduled_to`, `homework`, `location`, `location_link`, `note`, `lesson_type`, `is_active`, `created_at`
 
 **Attendance** — `id`, `lesson_id`, `date`, `course_id`, `student_id`, `status`, `comment`, `marked_by`, `created_at`
 
@@ -448,8 +454,7 @@ Inbox — это не дашборд и не список уведомлений
 | 🌟 Пробные  | 🌟     | Новые ученики без посещений               | «Артём · Новый ученик»             |
 | ⚠ Требуют  | ⚠      | Длительное отсутствие (>14 дней)          | «Максим · Не был 18 дней»          |
 | внимания    |        |                                           |                                    |
-| ⚡ Быстрые  | ⚡     | Постоянные действия                       | «+ Новый ученик», «+ Разовое»      |
-| действия    |        |                                           |                                    |
+
 
 ### Почему группировка, а не список приоритетов
 
@@ -462,7 +467,7 @@ Inbox — это не дашборд и не список уведомлений
 ### Как работает
 
 1. При загрузке `GET /api/inbox` собирает все сигналы
-2. Группирует по категориям: занятия, оплаты, пробные, требующие внимания, быстрые действия
+2. Группирует по категориям: занятия, оплаты, пробные, требующие внимания
 3. Внутри группы сортирует по приоритету
 4. Каждый элемент — кликабельная карточка с действием
 5. Данные обновляются каждые 30 секунд
@@ -512,7 +517,7 @@ Lesson объединяет все действия, которые препод
 |-------|------------------|---------------------------------------------------|---------|
 | GET   | `/api/inbox`     | Группированные действия на сегодня                | Любой   |
 
-Возвращает `groups[]` с категориями: lessons, payments, trials, attention, actions.
+Возвращает `groups[]` с категориями: lessons, payments, trials, attention.
 
 ### Health
 
@@ -580,6 +585,18 @@ Lesson объединяет все действия, которые препод
 | GET    | `/api/achievements`     | Список достижений     | Любой   |
 | POST   | `/api/achievements`     | Создать достижение    | Admin   |
 | DELETE | `/api/achievements/{id}`| Удалить достижение    | Admin   |
+### Groups
+
+| Метод  | Путь                                            | Описание                        | Доступ  |
+|--------|--------------------------------------------------|----------------------------------|---------|
+| GET    | `/api/groups`                                    | Список групп (фильтр по курсу)  | Любой   |
+| GET    | `/api/groups/{id}`                               | Детали группы (+ ученики)       | Любой   |
+| POST   | `/api/groups`                                    | Создать группу                  | Любой   |
+| PUT    | `/api/groups/{id}`                               | Обновить группу                 | Любой   |
+| DELETE | `/api/groups/{id}`                               | Удалить (soft)                  | Любой   |
+| POST   | `/api/groups/{id}/students`                      | Добавить ученика в группу       | Любой   |
+| DELETE | `/api/groups/{id}/students/{student_id}`         | Удалить ученика из группы       | Любой   |
+| POST   | `/api/groups/clear-students`                     | Очистить состав всех групп      | Любой   |
 
 ### Lessons
 

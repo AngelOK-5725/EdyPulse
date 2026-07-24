@@ -52,6 +52,7 @@ function getTimeDisplay(lesson: { start_time?: string; end_time?: string; time?:
 interface LessonData {
   id: string;
   course_id: string;
+  group_id?: string;
   date: string;
   time: string;
   start_time: string;
@@ -498,44 +499,41 @@ export default function LessonDetailPage() {
     setShowGroupManagement(true);
   };
 
-  const handleRemoveStudent = async (studentId: string, attendanceRecordId?: string) => {
+  const handleRemoveStudent = async (studentId: string) => {
     if (!lesson) return;
 
-    // Find attendance record ID for this student
-    let recordId = attendanceRecordId;
-    if (!recordId) {
-      try {
-        const attData = await api.getAttendance(lesson.course_id, lesson.date, lesson.id);
-        if (attData.attendance.length > 0) {
-          recordId = attData.attendance[0].id;
-        }
-      } catch { /* ignore */ }
-    }
-
-    if (!recordId) {
-      // If no record found, just remove from local state
-      setStudents(prev => prev.filter(s => s.id !== studentId));
-      setAttendanceMap(prev => {
-        const newMap = { ...prev };
-        delete newMap[studentId];
-        return newMap;
-      });
-      return;
-    }
+    // Подтверждение
+    if (!confirm('Удалить ученика из группы? Он перестанет отображаться в текущих занятиях.\n\nИстория его посещаемости сохранится.')) return;
 
     setRemovingStudent(studentId);
     try {
-      await api.deleteAttendance(recordId);
-      // Remove from local state
+      // Удаляем из состава группы (если урок привязан к группе)
+      // Посещаемость НЕ трогаем — она остаётся в истории
+      if (lesson.group_id) {
+        try {
+          await api.removeStudentFromGroup(lesson.group_id, studentId);
+        } catch (e: any) {
+          // 404 = ученик не был в группе — не страшно, продолжаем
+          if (e?.status !== 404) throw e;
+        }
+      }
+
+      // Убираем из локального состояния (только на этом уроке)
       setStudents(prev => prev.filter(s => s.id !== studentId));
       setAttendanceMap(prev => {
         const newMap = { ...prev };
         delete newMap[studentId];
         return newMap;
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to remove student:', e);
-      alert('❌ Ошибка при удалении ученика');
+      const status = e?.status || e?.response?.status;
+      const msg = status === 403
+        ? '❌ Недостаточно прав для удаления'
+        : status === 404
+          ? '❌ Ученик или группа не найдены'
+          : '❌ Ошибка при удалении ученика. Попробуйте позже.';
+      alert(msg);
     } finally {
       setRemovingStudent(null);
     }
@@ -789,13 +787,15 @@ export default function LessonDetailPage() {
                 {lessonStatusInfo?.icon} {lessonStatusInfo?.label || lessonStatus}
               </button>
               {showStatusMenu && (
-                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-lg border z-10 overflow-hidden min-w-[140px]">
+                <div className="absolute top-full right-0 mt-1 bg-[var(--tg-theme-bg-color)] rounded-xl shadow-lg border border-[var(--tg-theme-section-separator-color)] z-10 overflow-hidden min-w-[160px]">
                   {LESSON_STATUSES.map(s => (
                     <button
                       key={s.key}
                       onClick={() => handleStatusChange(s.key)}
-                      className={`w-full px-3 py-2.5 text-xs font-medium text-left hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                        lessonStatus === s.key ? 'bg-gray-50 font-semibold' : ''
+                      className={`w-full px-3 py-2.5 text-xs font-medium text-left transition-colors flex items-center gap-2 text-[var(--tg-theme-text-color)] ${
+                        lessonStatus === s.key
+                          ? 'bg-[var(--tg-theme-secondary-bg-color)] font-semibold'
+                          : 'hover:bg-[var(--tg-theme-secondary-bg-color)]'
                       }`}
                     >
                       {s.icon} {s.label}
